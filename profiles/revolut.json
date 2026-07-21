@@ -1,0 +1,76 @@
+{
+  "name": "revolut",
+  "label": "Revolut personal CSV export",
+  "account": "revolut",
+  "encoding": "utf-8",
+  "match": {
+    "headers_all": [
+      "Type",
+      "Started Date",
+      "Completed Date",
+      "Description",
+      "Amount",
+      "State"
+    ]
+  },
+  "columns": {
+    "date": {
+      "coalesce": [
+        "Completed Date",
+        "Started Date"
+      ],
+      "format": "%Y-%m-%d"
+    },
+    "name": {
+      "col": "Description"
+    },
+    "merchant": {
+      "col": "Description"
+    },
+    "amount": {
+      "col": "Amount",
+      "decimal": ".",
+      "sign": "native"
+    }
+  },
+  "row_filter": {
+    "col": "State",
+    "exclude": [
+      "REVERTED",
+      "FAILED"
+    ]
+  },
+  "skip": [
+    "revpoints spare change"
+  ],
+  "rules": [
+    {
+      "match": "paybis",
+      "direction": "internal",
+      "name": "Paybis crypto ramp",
+      "note": "fiat <-> crypto on/off-ramp"
+    },
+    {
+      "match": "apple pay top-?up",
+      "direction": "internal",
+      "name": "Top-up to Revolut",
+      "note": "own card top-up"
+    },
+    {
+      "match": "to bybit|bybit eu gmbh",
+      "direction": "internal",
+      "transfer_to": "bybit",
+      "note": "Revolut -> Bybit"
+    },
+    {
+      "match": "to your name|payment from your name|transfer from your name",
+      "direction": "internal",
+      "note": "own-account transfer"
+    },
+    {
+      "match": "revolut bank uab",
+      "direction": "internal",
+      "note": "internal Revolut movement"
+    }
+  ]
+}

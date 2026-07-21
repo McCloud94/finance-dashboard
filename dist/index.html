@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover lets the app paint into the notch/home-indicator
+         area; the .pt-safe / .pb-safe helpers put the padding back where the UI
+         actually meets an edge -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5"
+    />
+    <title>Finances</title>
+
+    <!-- installable app: standalone launch, no Safari chrome -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Finances" />
+    <!-- the status bar tints to match the header in each theme -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f3ea" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1f1b17" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <script>
+      // anti-flash: apply saved theme before first paint. The accent is fixed
+      // in CSS now, so there is no stored colour left to parse here.
+      (function () {
+        try {
+          var t = localStorage.getItem("os-theme");
+          if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-5WDP4yYS.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-C3KS-cqa.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

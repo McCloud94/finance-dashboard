@@ -1,0 +1,402 @@
+@import "tailwindcss";
+
+/* Content font — transaction names, freeform text */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+
+/* Interface font — menu, headings, numbers, UI chrome */
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/700.css";
+
+/* ─── Primary theme palette (Cecilia May) — warm "aging paper" scales ────────
+   Raw HSL scales lifted from the Primary Obsidian theme. l = light, d = dark.
+   Semantic tokens below reference these; utilities reference the semantics,
+   so flipping [data-theme] or --accent-* re-skins the whole app at runtime.  */
+:root {
+  /* warm gray scale — light */
+  --l-gray-10: hsl(36 38% 98%);
+  --l-gray-20: hsl(35 36% 96%);
+  --l-gray-30: hsl(35 37% 92%);
+  --l-gray-40: hsl(34 34% 90%);
+  --l-gray-60: hsl(37 38% 83%);
+  --l-gray-80: hsl(34 29% 60%);
+  --l-gray-100: hsl(35 28% 40%);
+  --l-gray-130: hsl(31 45% 24%);
+  /* warm gray scale — dark */
+  --d-gray-20: hsl(34 39% 74%);
+  --d-gray-40: hsl(35 27% 55%);
+  --d-gray-50: hsl(34 24% 46%);
+  --d-gray-80: hsl(28 22% 19%);
+  --d-gray-90: hsl(33 20% 17%);
+  --d-gray-100: hsl(30 19% 15%);
+  --d-gray-120: hsl(29 16% 13%);
+  /* (Primary's own red/green/orange scales were dropped — the brand hues below
+     serve as the status colours now, so those were a second, conflicting set.) */
+
+  /* ── Accent — fixed burgundy #931037. Not user-selectable by design: the
+       accent carries meaning (active nav, planned rows, needs-review), so it
+       is part of the brand rather than a preference. ─────────────────────── */
+  --accent-h: 342;
+  --accent-s: 80%;
+  --accent-l: 32%;
+
+  /* ── Brand palette ────────────────────────────────────────────────────────
+     Four hues used across charts, categories, per-view accents and controls.
+     Kept as h/s/l triples so tints and shades derive from one source rather
+     than being hand-picked hex values that drift apart over time.
+
+     Values are the exact HSL conversions of the source hex, to one decimal.
+     Rounding them to whole numbers looked harmless but was not: amber at
+     38 57% 52% renders #c3994f, not #cd9a3b — visibly duller and greener than
+     the colour asked for. Keep the decimals.                                */
+  --brand-amber-h: 39;    --brand-amber-s: 59.3%; --brand-amber-l: 51.8%; /* cd9a3b */
+  --brand-blue-h: 204.8;  --brand-blue-s: 43.8%;  --brand-blue-l: 41.2%;  /* 3b7197 */
+  --brand-red-h: 6.2;     --brand-red-s: 49.4%;   --brand-red-l: 46.5%;   /* b1483c */
+  --brand-green-h: 139.8; --brand-green-s: 52.4%; --brand-green-l: 45.3%; /* 37b05f */
+
+  --brand-amber: hsl(var(--brand-amber-h) var(--brand-amber-s) var(--brand-amber-l));
+  --brand-blue: hsl(var(--brand-blue-h) var(--brand-blue-s) var(--brand-blue-l));
+  --brand-red: hsl(var(--brand-red-h) var(--brand-red-s) var(--brand-red-l));
+  --brand-green: hsl(var(--brand-green-h) var(--brand-green-s) var(--brand-green-l));
+
+  /* Per-view accent. --view-accent is rewritten on <html> as the route changes
+     (see App.tsx), so nav, headings and focus rings recolour per page while the
+     burgundy --accent stays the app's constant. */
+  --view-accent: var(--accent);
+  --view-accent-soft: var(--accent-soft);
+
+  /* ── Control elevation ────────────────────────────────────────────────────
+     The raised-key look from the reference: a HARD, unblurred bottom lip in
+     the button's own colour darkened, not a soft drop shadow. That lip is what
+     makes the key read as a physical object with thickness — a blurred shadow
+     reads as a sticker floating above the page instead.
+
+     Every layer is INSET — the bevel lives inside the shape, not under it. An
+     outset shadow reads as a flat card hovering above the page; an inset one
+     reads as a moulded key with thickness, which is the difference between the
+     two halves of the reference.
+
+     The darkening is plain black at low alpha rather than a per-variant
+     colour, and that is what keeps the bevel tinted: black over the fill
+     darkens the fill's own hue, so an amber key gets a darker amber edge and a
+     cream key a warm taupe one, from one token. A named grey would flatten
+     both to the same lifeless line.
+
+     Order matters: top highlight, bottom shade, hairline rim. */
+  --btn-lip: 1px;
+  --shadow-btn:
+    inset 0 1px 0 rgb(255 255 255 / 0.30),
+    inset 0 -3px 0 rgb(0 0 0 / 0.15),
+    inset 0 0 0 1px rgb(0 0 0 / 0.10),
+    0 1px 1.5px rgb(0 0 0 / 0.09);
+  --shadow-btn-hover:
+    inset 0 1px 0 rgb(255 255 255 / 0.38),
+    inset 0 -3px 0 rgb(0 0 0 / 0.15),
+    inset 0 0 0 1px rgb(0 0 0 / 0.12),
+    0 1px 2.5px rgb(0 0 0 / 0.12);
+  /* pressed: bevel inverts — light edge moves to the bottom, shade to the top */
+  --shadow-btn-active:
+    inset 0 2px 4px rgb(0 0 0 / 0.20),
+    inset 0 -1px 0 rgb(255 255 255 / 0.14),
+    inset 0 0 0 1px rgb(0 0 0 / 0.12);
+
+  /* ── Semantic tokens — LIGHT (default) ───────────────────────────────────── */
+  --bg-app: var(--l-gray-30);      /* page canvas */
+  --bg-primary: var(--l-gray-20);  /* card / paper surface */
+  --bg-subtle: var(--l-gray-40);   /* raised fill, chips */
+  --border: var(--l-gray-60);
+  --text-normal: var(--l-gray-130);
+  --text-muted: var(--l-gray-100);
+  --text-faint: var(--l-gray-80);
+  --text-on-accent: var(--l-gray-10);
+  --accent: hsl(var(--accent-h) var(--accent-s) var(--accent-l));
+  --accent-soft: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.12);
+  /* Semantic status colours ARE the brand hues, not lookalikes. Keeping the
+     Primary theme's own red/green alongside cd9a3b/b1483c/37b05f gave two
+     nearly-identical greens on one screen — a bar and an amount that should
+     read as the same thing looked subtly mismatched. One source now. */
+  --income: var(--brand-green);
+  --expense: var(--brand-red);
+  --warn: var(--brand-amber);
+
+  --shadow-card: 0px 1px 2px rgb(0 0 0 / 0.028), 0px 3.4px 6.7px rgb(0 0 0 / 0.042), 0px 15px 30px rgb(0 0 0 / 0.07);
+  --shadow-drop: 0px 1.8px 7.3px rgb(0 0 0 / 0.09), 0px 6.3px 24.7px rgb(0 0 0 / 0.13);
+  --shadow-modal: 0px 1.8px 7.3px rgb(0 0 0 / 0.09), 0px 6.3px 24.7px rgb(0 0 0 / 0.13), 0px 30px 90px rgb(0 0 0 / 0.22);
+}
+
+/* ── Semantic tokens — DARK ──────────────────────────────────────────────────
+   Applied by explicit [data-theme="dark"] OR by OS preference when the user
+   hasn't picked. Accent lightens for contrast on the dark canvas.            */
+:root[data-theme="dark"] {
+  --accent-l: 46%;
+  /* brand hues lift and desaturate slightly so they hold contrast on the dark
+     canvas without glowing */
+  --brand-amber-l: 60%;
+  --brand-blue-l: 56%;
+  --brand-red-l: 57%;
+  --brand-green-l: 52%;
+  --shadow-btn:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 -3px 0 rgb(0 0 0 / 0.30),
+    inset 0 0 0 1px rgb(0 0 0 / 0.25),
+    0 1px 1.5px rgb(0 0 0 / 0.25);
+  --shadow-btn-hover:
+    inset 0 1px 0 rgb(255 255 255 / 0.17),
+    inset 0 -3px 0 rgb(0 0 0 / 0.30),
+    inset 0 0 0 1px rgb(0 0 0 / 0.28),
+    0 1px 2.5px rgb(0 0 0 / 0.30);
+  --shadow-btn-active:
+    inset 0 2px 4px rgb(0 0 0 / 0.38),
+    inset 0 -1px 0 rgb(255 255 255 / 0.07),
+    inset 0 0 0 1px rgb(0 0 0 / 0.28);
+  --bg-app: var(--d-gray-120);
+  --bg-primary: var(--d-gray-100);
+  --bg-subtle: var(--d-gray-90);
+  --border: var(--d-gray-80);
+  --text-normal: var(--d-gray-20);
+  --text-muted: var(--d-gray-40);
+  --text-faint: var(--d-gray-50);
+  --income: var(--brand-green);
+  --expense: var(--brand-red);
+  --warn: var(--brand-amber);
+  --shadow-card: 0px 1px 2px rgb(0 0 0 / 0.23), 0px 3.4px 6.7px rgb(0 0 0 / 0.24), 0px 15px 30px rgb(0 0 0 / 0.27);
+  --shadow-drop: 0px 1.8px 7.3px rgb(0 0 0 / 0.27), 0px 6.3px 24.7px rgb(0 0 0 / 0.31);
+  --shadow-modal: 0px 1.8px 7.3px rgb(0 0 0 / 0.27), 0px 6.3px 24.7px rgb(0 0 0 / 0.31), 0px 30px 90px rgb(0 0 0 / 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent-l: 46%;
+    --brand-amber-l: 60%;
+    --brand-blue-l: 56%;
+    --brand-red-l: 57%;
+    --brand-green-l: 52%;
+    --shadow-btn: 0 1px 2px rgb(0 0 0 / 0.30), 0 2px 5px rgb(0 0 0 / 0.24),
+      inset 0 1px 0 rgb(255 255 255 / 0.07);
+    --shadow-btn-hover: 0 2px 4px rgb(0 0 0 / 0.34), 0 5px 12px rgb(0 0 0 / 0.28),
+      inset 0 1px 0 rgb(255 255 255 / 0.10);
+    --shadow-btn-active: inset 0 2px 4px rgb(0 0 0 / 0.40);
+    --bg-app: var(--d-gray-120);
+    --bg-primary: var(--d-gray-100);
+    --bg-subtle: var(--d-gray-90);
+    --border: var(--d-gray-80);
+    --text-normal: var(--d-gray-20);
+    --text-muted: var(--d-gray-40);
+    --text-faint: var(--d-gray-50);
+    --income: var(--brand-green);
+    --expense: var(--brand-red);
+    --warn: var(--brand-amber);
+    --shadow-card: 0px 1px 2px rgb(0 0 0 / 0.23), 0px 3.4px 6.7px rgb(0 0 0 / 0.24), 0px 15px 30px rgb(0 0 0 / 0.27);
+    --shadow-drop: 0px 1.8px 7.3px rgb(0 0 0 / 0.27), 0px 6.3px 24.7px rgb(0 0 0 / 0.31);
+    --shadow-modal: 0px 1.8px 7.3px rgb(0 0 0 / 0.27), 0px 6.3px 24.7px rgb(0 0 0 / 0.31), 0px 30px 90px rgb(0 0 0 / 0.4);
+  }
+}
+
+/* ─── Tailwind token map (inline → utilities reference runtime vars) ──────────
+   Existing class names (bg-paper, text-ink, text-gray-400 …) are preserved so
+   no component markup changes; only their resolved values move to Primary.   */
+@theme inline {
+  --font-sans: "JetBrains Mono", ui-monospace, monospace; /* interface default */
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-content: "Inter", system-ui, -apple-system, sans-serif;
+
+  --color-ink: var(--text-normal);
+  --color-paper: var(--bg-primary);
+  --color-gray-600: var(--text-muted);
+  --color-gray-400: var(--text-faint);
+  --color-gray-200: var(--border);
+  --color-gray-100: var(--bg-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-income: var(--income);
+  --color-expense: var(--expense);
+
+  /* brand + per-view accent as utilities: bg-brand-blue, text-view, … */
+  --color-brand-amber: var(--brand-amber);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-red: var(--brand-red);
+  --color-brand-green: var(--brand-green);
+  --color-view: var(--view-accent);
+  --color-view-soft: var(--view-accent-soft);
+
+  --radius-card: 8px;
+  --radius-input: 6px;
+  --radius-badge: 4px;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-drop: var(--shadow-drop);
+  --shadow-modal: var(--shadow-modal);
+  --shadow-btn: var(--shadow-btn);
+  --shadow-btn-hover: var(--shadow-btn-hover);
+  --shadow-btn-active: var(--shadow-btn-active);
+
+  --animate-fade-in: fade-in 0.18s ease-out;
+  --animate-rise-in: rise-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-pop-in: pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-in-left: slide-in-left 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-in-right: slide-in-right 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Motion ─────────────────────────────────────────────────────────────────
+   Entrance-only, short, and eased out. Nothing loops and nothing animates on
+   an interval — motion marks a state change and then gets out of the way.   */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+
+/* Stagger helper: children fade up in sequence. Capped at 8 so a 200-row list
+   doesn't end up with a two-second cascade. */
+.stagger > * {
+  animation: rise-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 200ms; }
+.stagger > *:nth-child(7) { animation-delay: 240ms; }
+.stagger > *:nth-child(n + 8) { animation-delay: 280ms; }
+
+/* Honour the OS setting — required, not optional. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text-normal);
+  font-family: var(--font-sans); /* JetBrains Mono — interface */
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* iOS: don't rescale text in landscape, and don't rubber-band the whole app
+     behind the fixed chrome */
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+/* iOS zooms the viewport when a focused input is under 16px. Bumping the font
+   size on touch devices is the only reliable way to prevent that.
+   !important because these are element selectors (0,0,1) and every field in
+   the app carries a Tailwind text-* class (0,1,0) — without it the guard lost
+   every cascade it was written to win, and tapping a filter still zoomed. */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Kill the grey tap flash; we render our own :active states. */
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Notch / home-indicator padding, applied where the app meets the screen edge.
+ *
+ * These ADD to a base padding instead of replacing it. Setting `padding-top:
+ * env(safe-area-inset-top)` outright — as this did — resolves to 0px on every
+ * device without a notch, which silently wiped the element's own Tailwind
+ * padding: on desktop the header's py-4 became padding-top:0 and the Add-entry
+ * button sat flush against the window edge.
+ *
+ * Set the base with an arbitrary property on the element, e.g.
+ * `class="pt-safe [--pt:1rem] md:[--pt:1.25rem]"`.
+ */
+.pb-safe {
+  padding-bottom: calc(var(--pb, 0px) + env(safe-area-inset-bottom, 0px));
+}
+.pt-safe {
+  padding-top: calc(var(--pt, 0px) + env(safe-area-inset-top, 0px));
+}
+
+/* Inter for human-entered content (tx names, notes) */
+.font-content {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Raised key ─────────────────────────────────────────────────────────────
+   Shared by <Button> and the hand-rolled controls (selects, filter pills, nav
+   items) so everything clickable presses with the same feel. Anything that
+   should look pressable wears .key; nothing else does — that consistency is
+   what tells the eye "this is a control" before the label is even read.     */
+.key {
+  box-shadow: var(--shadow-btn);
+  transition:
+    box-shadow 140ms ease-out,
+    transform 140ms ease-out,
+    background-color 140ms ease-out,
+    filter 140ms ease-out;
+}
+.key:hover:not(:disabled) {
+  box-shadow: var(--shadow-btn-hover);
+}
+.key:active:not(:disabled) {
+  box-shadow: var(--shadow-btn-active);
+  transform: translateY(var(--btn-lip));
+}
+.key:disabled {
+  box-shadow: none;
+}
+
+/* tabular numerals on every amount */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

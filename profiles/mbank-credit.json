@@ -1,0 +1,37 @@
+{
+  "name": "mbank-credit",
+  "label": "mBank credit card (SK export)",
+  "account": "mcredit",
+  "encoding": "utf-8",
+  "match": {
+    "headers_all": [
+      "#Dátum zaúčtovania transakcie",
+      "#Popis operácie",
+      "#Popis",
+      "#Suma transakcie"
+    ]
+  },
+  "columns": {
+    "date": { "col": "#Dátum zaúčtovania transakcie", "format": "%d-%m-%Y" },
+    "name": { "coalesce": ["#Popis", "#Popis operácie"] },
+    "merchant": { "col": "#Popis" },
+    "amount": { "col": "#Suma transakcie", "decimal": ",", "sign": "native" }
+  },
+  "rules": [
+    {
+      "match": "splatka",
+      "direction": "internal",
+      "transfer_to": "mbank",
+      "name": "Card payback received",
+      "note": "mBank -> mCredit"
+    },
+    {
+      "match": "revolut.{0,4}9619",
+      "direction": "internal",
+      "transfer_to": "revolut",
+      "name": "Cash-out to Revolut",
+      "note": "mCredit -> Revolut"
+    },
+    { "match": "^uroky$|uroky", "category": "debt", "name": "Credit card interest" }
+  ]
+}

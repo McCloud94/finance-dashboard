@@ -1,0 +1,80 @@
+{
+  "_doc": "Global post-pass applied to every normalized row regardless of source bank. 'merchants' canonicalizes the raw statement string into a clean display name; 'categories' maps that clean name to a category id from data/categories.json. Patterns are matched against a diacritics-stripped, lowercased 'name merchant' haystack, so write them without accents. This is a STARTER set — add your own merchants and mappings. Patterns are regex; '|' means OR.",
+  "merchants": {
+    "amazon": "Amazon",
+    "apple.com/bill|^apple$": "Apple",
+    "netflix": "Netflix",
+    "spotify": "Spotify",
+    "youtube": "YouTube",
+    "openai|chatgpt": "OpenAI",
+    "claude.ai|anthropic": "Claude.ai",
+    "uber": "Uber",
+    "shell|omv|petrol": "Fuel",
+    "lidl": "Lidl",
+    "tesco": "Tesco",
+    "kaufland": "Kaufland",
+    "aldi": "Aldi",
+    "pharmacy|lekaren": "Pharmacy",
+    "gym|fitness": "Gym"
+  },
+  "categories": {
+    "food": [
+      "lidl",
+      "tesco",
+      "kaufland",
+      "aldi",
+      "restaurant",
+      "bistro",
+      "pizza",
+      "kebab",
+      "cafe",
+      "coffee",
+      "grocery",
+      "supermarket"
+    ],
+    "life": [
+      "amazon",
+      "apple",
+      "uber",
+      "fuel",
+      "transit",
+      "clothes",
+      "cash withdrawal",
+      "netflix",
+      "spotify",
+      "youtube"
+    ],
+    "health": [
+      "pharmacy",
+      "gym",
+      "fitness",
+      "doctor",
+      "dentist",
+      "supplements"
+    ],
+    "business": [
+      "openai",
+      "claude.ai",
+      "anthropic",
+      "software license",
+      "domain",
+      "hosting",
+      "stripe",
+      "subscription"
+    ],
+    "fun": [
+      "cinema",
+      "concert",
+      "festival",
+      "bar"
+    ],
+    "rent": [
+      "rent",
+      "landlord"
+    ],
+    "debt": [
+      "interest",
+      "loan payment"
+    ]
+  }
+}

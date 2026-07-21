@@ -1,0 +1,92 @@
+[
+  {
+    "id": "food",
+    "name": "Food",
+    "color": "#37b05f",
+    "type": "expense"
+  },
+  {
+    "id": "life",
+    "name": "Life",
+    "color": "#3b7197",
+    "type": "expense"
+  },
+  {
+    "id": "health",
+    "name": "Health",
+    "color": "#5a93b8",
+    "type": "expense"
+  },
+  {
+    "id": "business",
+    "name": "Business",
+    "color": "#931037",
+    "type": "expense"
+  },
+  {
+    "id": "fun",
+    "name": "Fun",
+    "color": "#cd9a3b",
+    "type": "expense"
+  },
+  {
+    "id": "rent",
+    "name": "Rent",
+    "color": "#b1483c",
+    "type": "expense"
+  },
+  {
+    "id": "travel",
+    "name": "Travel",
+    "color": "#e0b96b",
+    "type": "expense"
+  },
+  {
+    "id": "debt",
+    "name": "Debt",
+    "color": "#8a7f70",
+    "type": "expense"
+  },
+  {
+    "id": "ai",
+    "name": "AI",
+    "color": "#37b05f",
+    "type": "income"
+  },
+  {
+    "id": "job",
+    "name": "Job",
+    "color": "#3b7197",
+    "type": "income"
+  },
+  {
+    "id": "sell",
+    "name": "Sell",
+    "color": "#cd9a3b",
+    "type": "income"
+  },
+  {
+    "id": "prop_firms",
+    "name": "Prop Firms",
+    "color": "#931037",
+    "type": "income"
+  },
+  {
+    "id": "bybit_income",
+    "name": "Bybit",
+    "color": "#a97a28",
+    "type": "income"
+  },
+  {
+    "id": "client",
+    "name": "Client Work",
+    "color": "#5a93b8",
+    "type": "income"
+  },
+  {
+    "id": "family",
+    "name": "Family",
+    "color": "#6bc98a",
+    "type": "income"
+  }
+]

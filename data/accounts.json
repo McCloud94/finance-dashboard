@@ -1,0 +1,48 @@
+[
+  {
+    "id": "wise",
+    "name": "Wise",
+    "currency": "EUR",
+    "balance": 2000,
+    "type": "bank",
+    "balance_as_of": "2026-01-01"
+  },
+  {
+    "id": "revolut",
+    "name": "Revolut",
+    "currency": "EUR",
+    "balance": 500,
+    "type": "bank",
+    "balance_as_of": "2026-01-01"
+  },
+  {
+    "id": "mbank",
+    "name": "mBank",
+    "currency": "EUR",
+    "balance": 1000,
+    "type": "bank",
+    "balance_as_of": "2026-01-01"
+  },
+  {
+    "id": "mcredit",
+    "name": "Credit Card",
+    "currency": "EUR",
+    "balance": -450,
+    "type": "credit",
+    "balance_as_of": "2026-01-01"
+  },
+  {
+    "id": "bybit",
+    "name": "Bybit",
+    "currency": "EUR",
+    "balance": 0,
+    "type": "bank",
+    "balance_as_of": "2026-01-01"
+  },
+  {
+    "id": "cash",
+    "name": "Cash",
+    "currency": "EUR",
+    "type": "bank"
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "name": "wise",
+  "label": "Wise business statement CSV",
+  "account": "wise",
+  "encoding": "utf-8",
+  "match": { "headers_all": ["Description", "Date", "Amount"] },
+  "columns": {
+    "date": { "col": "Date", "format": "%d-%m-%Y" },
+    "name": {
+      "col": "Description",
+      "extract": {
+        "pattern": "(?i)(?:issued by|money (?:to|from))\\s+(.+)$",
+        "group": 1
+      }
+    },
+    "merchant": { "col": "Description" },
+    "amount": { "col": "Amount", "decimal": ".", "sign": "native" }
+  },
+  "rules": [
+    {
+      "match": "money to your name|money from your name",
+      "direction": "internal",
+      "name": "Wise -> personal",
+      "note": "own-account transfer"
+    }
+  ]
+}

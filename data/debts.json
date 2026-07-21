@@ -1,0 +1,25 @@
+[
+  {
+    "id": "mcredit",
+    "name": "Credit card",
+    "kind": "credit_card",
+    "counterparty": "Your Bank",
+    "account": "mcredit",
+    "credit_limit": 1500,
+    "balance": 0,
+    "due_amount": 450,
+    "due_date": "2026-01-25",
+    "note": "Outstanding is DERIVED from the linked account balance. due_amount/due_date are typed in from the statement (editable in the dashboard). Example debt entry — replace with your own."
+  },
+  {
+    "id": "loan_example",
+    "name": "Personal loan (example)",
+    "kind": "loan",
+    "counterparty": "Someone",
+    "credit_limit": null,
+    "balance": 1000,
+    "due_amount": null,
+    "due_date": null,
+    "note": "Example loan with no fixed schedule. Delete or edit in the dashboard."
+  }
+]
