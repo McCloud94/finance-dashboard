@@ -1,0 +1,14 @@
+# Fronts the dashboard with automatic HTTPS + a login gate.
+# {$VAR} are read from the caddy container's environment (set via .env).
+#
+# DOMAIN     — public hostname. With sslip.io, "44-127-82-12.sslip.io" resolves
+#              to 44.127.82.12 with zero DNS setup, and Caddy gets a real cert.
+# BASIC_USER — login username chosen during install.
+# BASIC_HASH — bcrypt hash of the password (installer runs `caddy hash-password`).
+
+{$DOMAIN} {
+	basic_auth {
+		{$BASIC_USER} {$BASIC_HASH}
+	}
+	reverse_proxy dashboard:8787
+}

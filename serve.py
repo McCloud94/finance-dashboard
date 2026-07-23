@@ -627,11 +627,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
+    # Host/port from env (Docker sets DASH_HOST=0.0.0.0 so Caddy can reach it).
+    # Default stays 127.0.0.1 → local tier is localhost-only, never exposed.
+    host = os.environ.get("DASH_HOST", "127.0.0.1")
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("DASH_PORT", "8787"))
     if not os.path.isfile(DB_FILE):
         print(f"WARNING: {DB_FILE} missing — run: python3 init_db.py")
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Personal-OS dashboard → http://127.0.0.1:{port}")
+    server = ThreadingHTTPServer((host, port), Handler)
+    print(f"Personal-OS dashboard → http://{host}:{port}")
     print(f"  db:   {DB_FILE}")
     print(f"  dist: {DIST_DIR}{'' if os.path.isdir(DIST_DIR) else '  (not built — API still works for dev)'}")
     try:

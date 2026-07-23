@@ -1,0 +1,60 @@
+# VPS "box" — dashboard + HTTPS reverse-proxy, plus an optional Hermes agent.
+#
+#   docker compose up -d                      # dashboard + caddy (public HTTPS + login)
+#   docker compose --profile agent up -d      # + Hermes (Telegram / voice / natural language)
+#
+# The installer writes .env and picks the profile; you rarely run these by hand.
+
+services:
+  dashboard:
+    build: .
+    restart: unless-stopped
+    environment:
+      DASH_HOST: 0.0.0.0
+      DASH_PORT: 8787
+    volumes:
+      # Named volume holds the SQLite DB + config → survives rebuilds.
+      - dashboard-data:/app/data
+    # No published ports: only Caddy reaches this, over the internal network.
+    expose:
+      - "8787"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - dashboard
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Set in .env. DOMAIN e.g. 44-127-82-12.sslip.io (auto-resolves to this IP).
+      DOMAIN: ${DOMAIN}
+      BASIC_USER: ${BASIC_USER}
+      BASIC_HASH: ${BASIC_HASH}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data     # Let's Encrypt certs persist here
+      - caddy-config:/config
+
+  # Optional. Enabled with `--profile agent` (installer asks). Runs the Hermes
+  # agent headless; it mounts this repo so it can call the dashboard API + files.
+  # Installer clones NousResearch/hermes-agent into ./hermes before build.
+  hermes:
+    profiles: ["agent"]
+    build: ./hermes
+    restart: unless-stopped
+    depends_on:
+      - dashboard
+    env_file: .env          # OPENROUTER_API_KEY, TELEGRAM_BOT_TOKEN, etc.
+    environment:
+      # Reach the dashboard API by service name over the internal network.
+      DASHBOARD_URL: http://dashboard:8787
+    volumes:
+      - .:/workspace                       # agent sees the repo (skills, scripts)
+      - dashboard-data:/workspace/data     # ...and the same live DB/config
+
+volumes:
+  dashboard-data:
+  caddy-data:
+  caddy-config:

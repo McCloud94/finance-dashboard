@@ -1,0 +1,9 @@
+.git
+node_modules
+dashboard/node_modules
+Statements
+*.log
+.DS_Store
+__pycache__
+*.pyc
+.env
