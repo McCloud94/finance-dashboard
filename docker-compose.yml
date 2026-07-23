@@ -46,7 +46,7 @@ services:
     restart: unless-stopped
     depends_on:
       - dashboard
-    env_file: .env          # OPENROUTER_API_KEY, TELEGRAM_BOT_TOKEN, etc.
+    env_file: .env          # OPENROUTER_API_KEY (Telegram paired via `hermes setup`)
     environment:
       # Reach the dashboard API by service name over the internal network.
       DASHBOARD_URL: http://dashboard:8787

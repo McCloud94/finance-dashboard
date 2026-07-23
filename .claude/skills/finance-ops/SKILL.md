@@ -5,7 +5,7 @@ description: Do a finance operation in plain language — add/edit/delete a tran
 
 # Finance operations
 
-The full, authoritative procedure lives in [`../../CLAUDE.md`](../../CLAUDE.md) → **Standard actions**. Read it, then act. Do not re-derive from `serve.py`.
+The full, authoritative procedure lives in the dashboard project's `CLAUDE.md` → **Standard actions**. Read it, then act (run all commands from the dashboard project root). Do not re-derive from `serve.py`.
 
 ## Fast path
 

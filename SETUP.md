@@ -35,7 +35,7 @@ The **selling point is the agent**: after a dinner or a grocery run, you say wha
 |------|-------------|-----------|
 | **A. App only** | You already use Claude Code, Hermes, or ChatGPT desktop | Point your agent at this folder. It auto-reads `CLAUDE.md` + `.claude/skills/` and can add/edit transactions, import statements, and run a monthly review. Nothing else to install. |
 | **B. App + Claude Code** | No agent yet, want the best coding-grade one | Install Claude Code (`npm i -g @anthropic-ai/claude-code`), run `claude` inside this folder, then talk to it. |
-| **C. App + Hermes** | Want Telegram / voice control locally | Install Hermes (`curl -fsSL https://hermes-agent.nousresearch.com/install.sh \| bash`), run `hermes setup`, point it here. |
+| **C. App + Hermes** | Want Telegram / voice control locally | Install Hermes (`curl -fsSL https://hermes-agent.nousresearch.com/install.sh \| bash`), run `hermes setup` (pairs Telegram). Then give it the finance skills: `cp -r .claude/skills/finance-* ~/.hermes/skills/`, and point its working folder at this project. |
 
 What the agent can do out of the box (see `.claude/skills/`):
 - **finance-ops** — "add -30 food, revolut", "log 2000 salary", "set food budget 400"
@@ -58,9 +58,15 @@ curl -fsSL https://raw.githubusercontent.com/McCloud94/finance-dashboard/main/in
 It asks for:
 - **Domain** — press Enter to accept the `sslip.io` default (turns your server IP into a real HTTPS hostname, zero DNS setup).
 - **Login** — a username + password to protect the dashboard.
-- **Agent** — yes/no. Yes → paste an [OpenRouter key](https://openrouter.ai/keys) and a [Telegram bot token](https://t.me/BotFather).
+- **Agent** — yes/no. Yes → paste an [OpenRouter key](https://openrouter.ai/keys). (Telegram is paired in one interactive step *after* launch — see below.)
 
-Then it starts everything and prints your `https://…` URL. Done.
+Then it starts everything and prints your `https://…` URL. If you enabled the agent, pair Telegram once:
+
+```bash
+docker compose exec hermes hermes setup     # follow the Telegram step
+```
+
+Done.
 
 ### What's running (the "box")
 

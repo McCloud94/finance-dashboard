@@ -64,11 +64,11 @@ say "AI agent (Hermes)?"
 echo "  Adds Telegram + voice control: text/say 'add -30 food, revolut' from your phone."
 WANT_AGENT="$(ask 'Enable agent? y/n' n)"
 
-OPENROUTER_API_KEY=""; TELEGRAM_BOT_TOKEN=""; PROFILE=""
+OPENROUTER_API_KEY=""; PROFILE=""
 if [ "$WANT_AGENT" = "y" ]; then
   PROFILE="agent"
   OPENROUTER_API_KEY="$(ask 'OpenRouter API key (openrouter.ai/keys)')"
-  TELEGRAM_BOT_TOKEN="$(ask 'Telegram bot token (@BotFather)')"
+  # Telegram is paired interactively (`hermes setup`) after the box is up, not here.
   if [ ! -d hermes/.git ]; then
     say "Fetching Hermes agent"
     git clone --depth 1 https://github.com/NousResearch/hermes-agent.git hermes
@@ -82,7 +82,6 @@ DOMAIN=$DOMAIN
 BASIC_USER=$BASIC_USER
 BASIC_HASH=$BASIC_HASH
 OPENROUTER_API_KEY=$OPENROUTER_API_KEY
-TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
 EOF
 chmod 600 .env
 
@@ -96,5 +95,8 @@ fi
 
 say "Live 🎉"
 echo "  Dashboard:  https://$DOMAIN   (login: $BASIC_USER)"
-[ -n "$PROFILE" ] && echo "  Agent:      message your Telegram bot to control it by phone."
+if [ -n "$PROFILE" ]; then
+  echo "  Agent:      pair Telegram once ->  docker compose exec hermes hermes setup"
+  echo "              then message your bot: 'add -30 food, revolut'."
+fi
 echo "  Logs:       cd $DIR && docker compose logs -f"

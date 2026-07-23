@@ -5,7 +5,7 @@ description: Import a bank statement / CSV export into the dashboard. Trigger on
 
 # Import a bank statement
 
-Full procedure: [`../../CLAUDE.md`](../../CLAUDE.md) → **Importing a bank statement**. Follow it.
+Full procedure: the dashboard project's `CLAUDE.md` → **Importing a bank statement**. Follow it (run all commands from the dashboard project root).
 
 ## Flow
 
