@@ -2,6 +2,15 @@
 
 You are the controller for a local-first personal finance dashboard. The user talks to you in plain language; you run the scripts and API below. **Do not re-derive the system from source each time** — the standard actions are documented here. Read `serve.py` only when a task falls outside them.
 
+## Skills
+
+Three skills in `.claude/skills/` (Claude Code auto-loads them; other agents: read the SKILL.md when the trigger matches):
+- **finance-ops** — add/edit/delete transactions, accounts, budgets, debts. Wraps *Standard actions* below.
+- **finance-import** — ingest bank CSV exports. Wraps *Importing a bank statement* below.
+- **finance-analysis** — read-only insight: monthly review, spending trends, cost-cutting. The one net-new capability not in this manual.
+
+The manual below stays the source of truth for ops/import; skills point back to it.
+
 ## System shape
 
 - Backend: `serve.py`, Python stdlib only, REST JSON API on `http://127.0.0.1:8787`, binds localhost.
