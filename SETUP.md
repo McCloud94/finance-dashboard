@@ -14,9 +14,7 @@ On Mac or Linux:
 curl -fsSL https://raw.githubusercontent.com/McCloud94/finance-dashboard/main/install.sh | bash
 ```
 
-It clones the project onto this computer, creates your database, and sets up an AI assistant to run it. Prefer to do it by hand? Read on.
-
-(Want it always-on and reachable from your phone? That is the **Online** section below — it is a separate install you run on a server, not an option in this one.)
+It downloads the project and asks where to run it — **1) on this computer** or **2) on a server**. Both paths are described below. Prefer to do everything by hand? Read on.
 
 ---
 
@@ -50,32 +48,50 @@ What the agent can do out of the box (see `.claude/skills/`):
 
 Always-on, reachable from your phone, and can run the **Hermes agent** so you control everything over Telegram. Ships with the agent by default.
 
-**Before you start, you need three things:**
+### What you need first
 
-1. **A Linux server.** Any cheap VPS works — Hetzner, DigitalOcean, Vultr — from about €4/month. Pick Ubuntu when it asks for an image. The provider emails you an IP address and a way to log in.
-2. **A terminal session on it.** From your Mac or Linux machine: `ssh root@YOUR-SERVER-IP`. Everything below happens *on the server*, not on your own computer.
-3. **Docker, on the server.** If it isn't there yet: `curl -fsSL https://get.docker.com | sh`.
+1. **A Linux server.** Any cheap VPS — Hetzner, DigitalOcean, Vultr. Budget about **€10/month** for one comfortable enough to run the agent too. Choose **Ubuntu** when it asks for an image. When it's created, the provider shows you an **IP address** and either a root password or your SSH key.
+2. **A terminal on that server.** From your own Mac or Linux machine:
+   ```bash
+   ssh root@YOUR-SERVER-IP
+   ```
+   Everything from here happens **on the server**. That's the whole meaning of option 2 — the installer doesn't rent a server or log into one for you.
 
-Then, still on the server:
+You do **not** need to install Docker, git, or anything else first. The installer does that part.
+
+### Then run
+
+On the server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/McCloud94/finance-dashboard/main/install.sh | bash -s -- --server
+curl -fsSL https://raw.githubusercontent.com/McCloud94/finance-dashboard/main/install.sh | bash
+# choose 2) On a server
 ```
 
-The `--server` flag is what selects this build. Without it the installer sets up the local version instead, which is the right choice on your own computer.
+It then walks through five steps, in this order:
+
+1. **Docker** — installed and started for you if the server hasn't got it (it usually hasn't). This is what runs the dashboard, the HTTPS proxy and the agent.
+2. **Your web address** — see below.
+3. **A login** — see below.
+4. **The AI agent** — optional, see below.
+5. **Starting everything** — builds and launches the containers.
 
 It asks for:
-- **Domain** — the hostname your dashboard answers on; it needs one to get an HTTPS certificate. Press Enter to accept the `sslip.io` default, which builds a working hostname out of your server's IP address for free — nothing to buy, no DNS to configure. Type your own domain instead only if you already point one at this server.
-- **Login** — a username and password of your choosing, to keep strangers out of your dashboard. You'll type them in the browser once.
-- **Agent** — yes/no. Yes needs an [OpenRouter account](https://openrouter.ai/keys) for the model and a Telegram account to message it from. (Telegram is paired in one interactive step *after* launch — see below.) No still gives you the full dashboard.
+- **Domain** — the hostname your dashboard answers on. It needs one because browsers won't issue an HTTPS certificate to a bare IP address. Press Enter to take the **sslip.io** default: `sslip.io` is a free public DNS service that resolves any address of the form `146-70-114-182.sslip.io` straight back to `146.70.114.182`. Nothing to buy, no DNS records to create, and Caddy gets a real certificate for it. Type your own domain instead only if you already point one at this server.
+- **Login** — a username and password you choose, so strangers can't read your finances. You type them into the browser once and your phone remembers them. Only the encrypted form is stored on the server.
+- **Agent** — yes/no. Yes needs two accounts: [OpenRouter](https://openrouter.ai/keys) (pay-as-you-go, provides the AI model — the key starts `sk-or-`) and Telegram (free, how you message it). Telegram is paired in one interactive step *after* launch — see below. Say no and you still get the full dashboard; you can enable the agent later.
 
-Then it starts everything and prints your `https://…` URL. If you enabled the agent, pair Telegram once:
+Then it starts everything and prints your `https://…` URL. The certificate is issued on the first visit, so if the browser complains on that very first load, wait ten seconds and reload.
+
+If you enabled the agent, one step is left — pair Telegram:
 
 ```bash
-docker compose exec hermes hermes setup     # follow the Telegram step
+cd ~/finance-dashboard && docker compose exec hermes hermes setup
 ```
 
-Done.
+It walks you through creating a bot and linking it. After that, message the bot from your phone: *"add -25 dinner, revolut"*.
+
+**If the URL doesn't load at all**, your provider's own firewall is probably blocking ports 80 and 443 — that one lives in their web panel, not on the server. On Hetzner: Cloud Console → your server → Firewalls.
 
 ### What's running (the "box")
 

@@ -5,22 +5,21 @@
 #
 # Sets up a private finance dashboard + an AI assistant that runs it for you.
 #
-# Installs on THIS computer by default — that is the path almost everyone wants,
-# and it needs nothing but python3. The always-on server build is the same
-# script run with --server, ON the server itself (see SETUP.md → Online). It is
-# deliberately not offered as a menu choice here: choosing it from a laptop used
-# to look like an option and then fail on the missing Docker daemon, because
-# nothing in this script rents or reaches a server for you.
+# Two targets, asked below: this computer (python3, nothing else) or a server
+# (Docker: dashboard + HTTPS + optional Telegram agent). The server path is
+# meant to be run ON the server, and installs what a fresh box is missing —
+# git and Docker included — rather than telling you to go and get them.
 set -euo pipefail
 
 REPO="https://github.com/McCloud94/finance-dashboard.git"
 DIR="${INSTALL_DIR:-$HOME/finance-dashboard}"
 
-MODE="local"
+# --force-mode skips the question (used by re-runs and by SETUP.md's copy-paste).
+MODE=""
 for arg in "$@"; do
   case "$arg" in
-    --server|--vps) MODE="server" ;;
-    --local)        MODE="local" ;;
+    --server|--vps) MODE="2" ;;
+    --local)        MODE="1" ;;
   esac
 done
 
@@ -31,6 +30,24 @@ note() { printf '%s%s%s\n' "$DIM" "$*" "$R"; }
 ok()   { printf '%s✓%s %s\n' "$G" "$R" "$*"; }
 warn() { printf '%s!%s %s\n' "$Y" "$R" "$*"; }
 ask()  { local p="$1" d="${2:-}" a; read -rp "$(printf '%s%s%s%s: ' "$C" "$p" "$R" "${d:+ [$d]}")" a </dev/tty; echo "${a:-$d}"; }
+
+SUDO=""
+[ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null && SUDO="sudo"
+
+# Install OS packages. Only ever called on Linux (the server path) — a Mac has
+# git via the developer tools and never needs Docker here.
+pkg_install() {
+  if command -v apt-get >/dev/null; then
+    $SUDO apt-get update -qq
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"
+  elif command -v dnf >/dev/null; then
+    $SUDO dnf install -y -q "$@"
+  elif command -v yum >/dev/null; then
+    $SUDO yum install -y -q "$@"
+  else
+    return 1
+  fi
+}
 
 banner() {
 cat <<'EOF'
@@ -50,19 +67,74 @@ echo
 note "  No spreadsheets or apps, no logins."
 }
 
+banner
+
 # --- 1. Get the code ------------------------------------------------------
+# git first: a fresh Linux server usually hasn't got it, and without it the
+# clone below fails on the user's very first command.
+if ! command -v git >/dev/null; then
+  if [ "$(uname -s)" = "Linux" ]; then
+    say "Installing git"
+    pkg_install git || { echo "Couldn't install git automatically. Install it, then re-run."; exit 1; }
+    ok "git installed"
+  else
+    echo "git is required. On a Mac, run 'xcode-select --install', then re-run."
+    exit 1
+  fi
+fi
+
 if [ -d "$DIR/.git" ]; then
   git -C "$DIR" pull --ff-only -q && ok "Updated $DIR"
 else
   git clone --depth 1 -q "$REPO" "$DIR" && ok "Downloaded to $DIR"
 fi
 cd "$DIR"
-banner
+
+# --- 2. Pick a target -----------------------------------------------------
+if [ -z "$MODE" ]; then
+  say "Where do you want to run it?"
+  echo
+  echo "  ${B}1) On this computer${R}"
+  echo "     Installs the dashboard in one folder on your computer."
+  echo "     ${G}+${R} Easy, and free."
+  echo "     ${Y}−${R} You can't view the dashboard from your phone, and you can't use"
+  echo "       it while the computer is off."
+  echo
+  echo "  ${B}2) On a server${R}"
+  echo "     ${B}Only pick this if you are already running this setup from a server.${R}"
+  echo "     ${G}+${R} Dashboard and AI agent reachable from anywhere, 24/7. You're out"
+  echo "       with friends for dinner — you send your finance agent a voice"
+  echo "       message, \"add expense dinner, 25 euro, category food, account"
+  echo "       Revolut\", and it's filed before dessert."
+  echo "     ${Y}−${R} Costs money (about €10/month for the server), and takes longer"
+  echo "       to set up."
+  echo "     ${DIM}Walks you through: installing Docker, a free public web address"
+  echo "     (sslip.io), an HTTPS certificate, a login, and the Hermes agent on"
+  echo "     Telegram. About 5 minutes, mostly waiting.${R}"
+  echo
+  MODE="$(ask 'Choose 1 or 2' 1)"
+fi
+
+# Choosing "server" on a laptop is the one wrong turn this menu allows, and it
+# used to fail late — four questions in, on the missing Docker daemon.
+if [ "$MODE" = "2" ] && [ "$(uname -s)" = "Darwin" ]; then
+  echo
+  warn "This is a Mac, not a server."
+  note "  Option 2 has to be run ON the server itself — it doesn't rent one or"
+  note "  connect to one for you. To do that: rent a Linux server, 'ssh root@ITS-IP',"
+  note "  and run this same command there. SETUP.md walks through it."
+  echo
+  if [ "$(ask 'Install on this computer instead? y/n' y)" = "y" ]; then
+    MODE="1"
+  else
+    exit 1
+  fi
+fi
 
 # =========================================================================
 # LOCAL — clone + an AI agent. No Docker.
 # =========================================================================
-if [ "$MODE" = "local" ]; then
+if [ "$MODE" = "1" ]; then
   say "Setting it up on this computer"
   note "  Private and free. Your data is a single file in $DIR/data — it never"
   note "  leaves this machine. Three steps: database, assistant, first chat."
@@ -120,75 +192,119 @@ if [ "$MODE" = "local" ]; then
 fi
 
 # =========================================================================
-# SERVER — Docker box. Run this ON the server, not on your laptop.
+# SERVER — Docker box. Assumes it is running ON the server.
 # =========================================================================
-say "Server install"
-note "  This builds the always-on box: dashboard + HTTPS + optional Telegram agent."
+say "Setting it up on this server"
+note "  Five steps: Docker, a web address, an HTTPS certificate, a login, and"
+note "  (optionally) the AI agent on Telegram. Everything runs in containers, so"
+note "  nothing is scattered around the machine and it all starts again on reboot."
 
-if [ "$(uname -s)" = "Darwin" ]; then
-  warn "This looks like a Mac, not a server."
-  note "  --server is meant to be run ON a Linux server you have already rented"
-  note "  and SSH'd into. It does not create or connect to one for you."
-  note "  For this computer, re-run without --server. Full walkthrough: SETUP.md."
-  exit 1
+# --- Docker ---------------------------------------------------------------
+# Required, not a preference: the box is three containers (the dashboard, Caddy
+# for HTTPS + the login gate, and Hermes). A fresh server has none of it.
+say "Step 1/5 — Docker"
+if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+  ok "Docker is already installed and running"
+else
+  if ! command -v docker >/dev/null; then
+    note "  Docker runs the dashboard, the HTTPS proxy and the agent as separate"
+    note "  containers. Installing it now from get.docker.com — takes a minute."
+    curl -fsSL https://get.docker.com | $SUDO sh
+    ok "Docker installed"
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    $SUDO systemctl enable --now docker 2>/dev/null || $SUDO service docker start 2>/dev/null || true
+  fi
+  docker info >/dev/null 2>&1 || {
+    echo "Docker is installed but won't start. Check 'systemctl status docker', then re-run."
+    exit 1
+  }
+  ok "Docker is running"
 fi
 
-if ! command -v docker >/dev/null; then
-  echo "Docker not found. Install Docker on this server first, then re-run:"
-  echo "    curl -fsSL https://get.docker.com | sh"
+docker compose version >/dev/null 2>&1 || {
+  echo "This Docker has no 'compose' plugin. Install Docker from get.docker.com (it bundles it), then re-run."
   exit 1
-fi
-if ! docker info >/dev/null 2>&1; then
-  echo "Docker is installed but its daemon isn't reachable."
-  echo "Start it (e.g. 'sudo systemctl start docker'), then re-run."
-  exit 1
-fi
-ok "Docker is running"
+}
 
+# --- Public address -------------------------------------------------------
+say "Step 2/5 — Your web address"
 IP="$(curl -fsS4 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
 DEF_DOMAIN="$(echo "$IP" | tr '.' '-').sslip.io"
-
-say "Public address"
-note "  The dashboard needs a hostname so it can get an HTTPS certificate."
-note "  sslip.io gives you one for free from this server's IP — nothing to buy,"
-note "  no DNS to configure. Press Enter to accept it, or type your own domain"
-note "  if you already point one at this server."
+note "  A dashboard on the internet needs a hostname before it can get an HTTPS"
+note "  certificate — browsers won't issue one for a bare IP address."
+note "  sslip.io solves that for free: the address below simply resolves back to"
+note "  this server's IP ($IP). Nothing to buy, no DNS to configure."
+note "  Press Enter to take it, or type your own domain if you already point one"
+note "  at this server."
 DOMAIN="$(ask 'Domain' "$DEF_DOMAIN")"
 
-say "Login (protects your dashboard on the open internet)"
-note "  Pick anything you like — you'll type these in the browser once."
+# --- Login ----------------------------------------------------------------
+say "Step 3/5 — A login"
+note "  Your dashboard will be reachable from the open internet, so it needs a"
+note "  password gate. Pick anything you like — you'll type it in the browser"
+note "  once and your phone will remember it. Only the encrypted form is stored."
 BASIC_USER="$(ask 'Username' admin)"
-PW="$(ask 'Password')"
+PW=""
+while [ -z "$PW" ]; do
+  PW="$(ask 'Password')"
+  [ -z "$PW" ] && warn "  A password is required — the dashboard would be public without one."
+done
 BASIC_HASH="$(docker run --rm caddy:2-alpine caddy hash-password --plaintext "$PW")"
+ok "Login set for '$BASIC_USER'"
 
-say "AI agent (Hermes)?"
-note "  Adds Telegram + voice control: text/say 'add -30 food, revolut' from your phone."
-note "  Needs an OpenRouter account (openrouter.ai) for the model, and a Telegram"
-note "  account to message it from. Say no and the dashboard still works."
-WANT_AGENT="$(ask 'Enable agent? y/n' n)"
+# --- Agent ----------------------------------------------------------------
+say "Step 4/5 — The AI agent (optional)"
+note "  This is the part that makes it worth having on a server: Hermes on"
+note "  Telegram. Text or send a voice message — 'add expense dinner, 25 euro,"
+note "  category food, account Revolut' — and it files it, wherever you are."
+note "  You'll need two accounts: OpenRouter (openrouter.ai, pay-as-you-go, for"
+note "  the AI model) and Telegram (free, to message it from)."
+note "  Say no and you still get the full dashboard; you can add this later."
+WANT_AGENT="$(ask 'Enable the agent? y/n' y)"
 
 OPENROUTER_API_KEY=""; PROFILE=""
 if [ "$WANT_AGENT" = "y" ]; then
   PROFILE="agent"
-  OPENROUTER_API_KEY="$(ask 'OpenRouter API key (openrouter.ai/keys)')"
+  note "  Get a key at https://openrouter.ai/keys (sign up, add a few euro, create"
+  note "  a key). It starts with 'sk-or-'."
+  OPENROUTER_API_KEY="$(ask 'OpenRouter API key')"
   # Telegram is paired interactively (`hermes setup`) after the box is up, not here.
   if [ ! -d hermes/.git ]; then
-    say "Fetching Hermes agent"
-    git clone --depth 1 https://github.com/NousResearch/hermes-agent.git hermes
+    say "Fetching the Hermes agent"
+    git clone --depth 1 -q https://github.com/NousResearch/hermes-agent.git hermes && ok "Hermes downloaded"
   fi
 fi
 
 say "Writing .env"
+# Compose interpolates the values inside .env before substituting them into the
+# compose file, so a literal $ has to be written as $$ or it is eaten. bcrypt
+# hashes are all $-delimited ($2a$14$...), so without this the login gate gets a
+# truncated hash and rejects the password you just chose — on every install.
+esc() { printf '%s' "$1" | sed 's/\$/$$/g'; }
 cat > .env <<EOF
-DOMAIN=$DOMAIN
-BASIC_USER=$BASIC_USER
-BASIC_HASH=$BASIC_HASH
-OPENROUTER_API_KEY=$OPENROUTER_API_KEY
+DOMAIN=$(esc "$DOMAIN")
+BASIC_USER=$(esc "$BASIC_USER")
+BASIC_HASH=$(esc "$BASIC_HASH")
+OPENROUTER_API_KEY=$(esc "$OPENROUTER_API_KEY")
 EOF
 chmod 600 .env
+ok "Settings saved (.env, readable only by you)"
 
-say "Starting the box"
-note "  First build pulls a few images — a minute or two."
+# --- Firewall -------------------------------------------------------------
+# Only touches a firewall that is actually switched on. A cloud-provider
+# firewall (Hetzner's, AWS security groups) is configured in their web panel and
+# can't be seen from in here — hence the closing note rather than a silent pass.
+if command -v ufw >/dev/null && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
+  say "Opening the web ports"
+  $SUDO ufw allow 80/tcp  >/dev/null 2>&1 || true
+  $SUDO ufw allow 443/tcp >/dev/null 2>&1 || true
+  ok "Ports 80 and 443 opened in the firewall"
+fi
+
+# --- Launch ---------------------------------------------------------------
+say "Step 5/5 — Starting everything"
+note "  First run downloads and builds the images — a couple of minutes."
 if [ -n "$PROFILE" ]; then
   docker compose --profile "$PROFILE" up -d --build
 else
@@ -196,10 +312,24 @@ else
 fi
 
 say "Live 🎉"
-echo "  Dashboard:  https://$DOMAIN   (login: $BASIC_USER)"
-note "  The HTTPS certificate is issued on the first visit — give it a few seconds."
+echo "  Dashboard:  ${B}https://$DOMAIN${R}"
+echo "  Login:      $BASIC_USER  (the password you just chose)"
+note "  The HTTPS certificate is issued on your first visit — if the browser"
+note "  warns on the very first load, give it ten seconds and reload."
 if [ -n "$PROFILE" ]; then
-  echo "  Agent:      pair Telegram once ->  docker compose exec hermes hermes setup"
-  echo "              then message your bot: 'add -30 food, revolut'."
+  echo
+  echo "  ${B}One step left${R} — connect Telegram to your agent:"
+  echo
+  echo "      ${B}cd \"$DIR\" && docker compose exec hermes hermes setup${R}"
+  echo
+  echo "  It walks you through creating a bot and pairing it. After that, message"
+  echo "  the bot from your phone: 'add -25 dinner, revolut'."
 fi
-echo "  Logs:       cd \"$DIR\" && docker compose logs -f"
+echo
+note "  Logs:    cd \"$DIR\" && docker compose logs -f"
+note "  Stop:    cd \"$DIR\" && docker compose down"
+note "  Update:  cd \"$DIR\" && git pull && docker compose up -d --build"
+echo
+note "  If the address doesn't load at all, your provider's own firewall may be"
+note "  blocking ports 80/443 — open them in their web panel (for Hetzner:"
+note "  Cloud Console → your server → Firewalls)."
