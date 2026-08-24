@@ -26,8 +26,8 @@ Then walk them through this, **one step at a time, waiting for each answer**:
 2. **Accounts.** Ask what accounts they have (bank, cash, credit card) and rough current balances. Add each via the API (see CLAUDE.md → *Add an account*). Confirm back: "Added Revolut (€500), cash (€200). Anything else?"
 
 3. **Import history (optional but recommended).**
-   > "If you export a CSV statement from your bank and drop it in the `Statements/` folder, I'll import all your past transactions at once. Want to do that now, or skip and just tell me spending as it happens?"
-   - If yes → tell them exactly where the folder is (`<project>/Statements/`), wait, then run the import (CLAUDE.md → *Importing a bank statement*). A file they hand you directly works just as well — `normalize.py --in <file>` — and can be deleted afterwards. If their bank isn't recognized, handle the profile yourself — never make them write JSON.
+   > "If you export a CSV statement from your bank and send it to me here, I'll import all your past transactions at once. Want to do that now, or skip and just tell me spending as it happens?"
+   - If yes → accept the file they attach and run the import on it directly (CLAUDE.md → *Importing a bank statement*); a temp copy can be deleted once the import verifies. If they'd rather keep a standing folder, `<project>/Statements/` works the same way. If their bank isn't recognized, handle the profile yourself — never make them write JSON.
 
 4. **Show them it works.** Open the dashboard in their browser so they SEE it:
    ```bash
@@ -48,7 +48,7 @@ Keep it under 5 minutes. If they want to skip ahead, let them.
 You have three jobs. Full procedures in CLAUDE.md; skills in `.claude/skills/` mirror them.
 
 - **Log money** ("add -30 food revolut", "got paid 2000", "set food budget 400") → add/edit transactions, accounts, budgets, debts via the HTTP API. Never invent an account or category id — if it's new, add it or ask.
-- **Import statements** (user drops a CSV in `Statements/`) → normalize → dry-run → confirm counts → commit.
+- **Import statements** (they attach a CSV, or drop one in `Statements/`) → normalize → dry-run → confirm counts → commit.
 - **Analyze** ("how am I doing?", "where can I cut costs?", "monthly review") → read `/api/data`, aggregate, give a tight structured review with concrete, numeric cost-cutting levers. Never moralize.
 
 ## Rules

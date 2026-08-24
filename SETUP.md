@@ -14,7 +14,9 @@ On Mac or Linux:
 curl -fsSL https://raw.githubusercontent.com/McCloud94/finance-dashboard/main/install.sh | bash
 ```
 
-It clones the project and asks Local or Online, then does the rest. Prefer to do it by hand? Read on.
+It clones the project onto this computer, creates your database, and sets up an AI assistant to run it. Prefer to do it by hand? Read on.
+
+(Want it always-on and reachable from your phone? That is the **Online** section below — it is a separate install you run on a server, not an option in this one.)
 
 ---
 
@@ -39,7 +41,7 @@ The **selling point is the agent**: after a dinner or a grocery run, you say wha
 
 What the agent can do out of the box (see `.claude/skills/`):
 - **finance-ops** — "add -30 food, revolut", "log 2000 salary", "set food budget 400"
-- **finance-import** — drop a bank CSV in `Statements/`, it normalizes + imports
+- **finance-import** — send it your bank's CSV export (attaching the file in the chat is enough), it normalizes + imports
 - **finance-analysis** — "how am I doing this month", "where can I cut costs" → structured review
 
 ---
@@ -48,17 +50,24 @@ What the agent can do out of the box (see `.claude/skills/`):
 
 Always-on, reachable from your phone, and can run the **Hermes agent** so you control everything over Telegram. Ships with the agent by default.
 
-You need a cheap Linux server (e.g. Hetzner, ~€4/mo) with Docker installed. Then on the server:
+**Before you start, you need three things:**
+
+1. **A Linux server.** Any cheap VPS works — Hetzner, DigitalOcean, Vultr — from about €4/month. Pick Ubuntu when it asks for an image. The provider emails you an IP address and a way to log in.
+2. **A terminal session on it.** From your Mac or Linux machine: `ssh root@YOUR-SERVER-IP`. Everything below happens *on the server*, not on your own computer.
+3. **Docker, on the server.** If it isn't there yet: `curl -fsSL https://get.docker.com | sh`.
+
+Then, still on the server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/McCloud94/finance-dashboard/main/install.sh | bash
-# choose 2) Online
+curl -fsSL https://raw.githubusercontent.com/McCloud94/finance-dashboard/main/install.sh | bash -s -- --server
 ```
 
+The `--server` flag is what selects this build. Without it the installer sets up the local version instead, which is the right choice on your own computer.
+
 It asks for:
-- **Domain** — press Enter to accept the `sslip.io` default (turns your server IP into a real HTTPS hostname, zero DNS setup).
-- **Login** — a username + password to protect the dashboard.
-- **Agent** — yes/no. Yes → paste an [OpenRouter key](https://openrouter.ai/keys). (Telegram is paired in one interactive step *after* launch — see below.)
+- **Domain** — the hostname your dashboard answers on; it needs one to get an HTTPS certificate. Press Enter to accept the `sslip.io` default, which builds a working hostname out of your server's IP address for free — nothing to buy, no DNS to configure. Type your own domain instead only if you already point one at this server.
+- **Login** — a username and password of your choosing, to keep strangers out of your dashboard. You'll type them in the browser once.
+- **Agent** — yes/no. Yes needs an [OpenRouter account](https://openrouter.ai/keys) for the model and a Telegram account to message it from. (Telegram is paired in one interactive step *after* launch — see below.) No still gives you the full dashboard.
 
 Then it starts everything and prints your `https://…` URL. If you enabled the agent, pair Telegram once:
 

@@ -66,15 +66,20 @@ curl -s -X POST http://127.0.0.1:8787/api/account -H 'Content-Type: application/
 
 ## Importing a bank statement
 
+Usually the user attaches the CSV to the conversation. Take the path from the
+attachment and normalize it in place — the file does not have to be moved into
+the project first.
+
 ```bash
-# the user drops exports into Statements/ — or hands you one file directly
-python3 normalize.py                 # Statements/*.csv → data/normalized.csv
 python3 normalize.py --in /path/to/statement.csv --out data/normalized.csv
+# or, for a standing folder of exports:
+python3 normalize.py                 # Statements/*.csv → data/normalized.csv
+
 python3 import_csv.py --dry-run      # preview counts, show unmatched
 python3 import_csv.py                # additive, deduplicating commit
 ```
 - The commit is **additive**: rows already present are skipped by id, so re-importing an overlapping statement is safe and needs no flag.
-- `Statements/` is a convenience, not an archive. A one-off file passed with `--in` works the same and can be deleted afterwards.
+- `Statements/` is a convenience, not an archive. A one-off file passed with `--in` works the same and can be deleted after the import verifies.
 - Re-importing a statement *after editing the categorize rules* changes row ids, so the old rows must be cleared first. That is explicitly scoped to one source file:
   ```bash
   python3 import_csv.py --replace --replace-source-file Revolut.csv

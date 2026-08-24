@@ -1,6 +1,10 @@
-# Finance Dashboard
+# Personal Finance Dashboard
 
-A local-first personal finance dashboard, **controlled by an AI agent**. You talk to it in plain language — "add a €40 grocery expense", "import my Revolut statement", "how much did I spend on food this month" — and the agent does it. No spreadsheets, no manual data entry.
+**Get organized and keep perfect clarity and control over your finances — on about 15 minutes of work a month.**
+
+A private, intelligent money dashboard that lives on your computer. You tell an AI what you need — import a bank statement at the end of the month, add a transaction, ask a question about your finances — and it does the rest.
+
+No spreadsheets or apps, no logins.
 
 - **Your data stays yours.** One SQLite file on your machine. No cloud account, no signup, no API keys.
 - **Zero backend dependencies.** The server is Python standard library only.
@@ -52,7 +56,7 @@ The whole point of this template is that you **don't** operate it by hand. Two s
 
 **A — You already use Claude Code.** Point it at this folder. It reads `CLAUDE.md` and can immediately add transactions, import statements, and answer questions. Fastest path.
 
-**B — You're new to AI tooling.** Follow `SETUP.md` (to be written) for the one-command installer that sets up the agent for you and walks you through your first import.
+**B — You're new to AI tooling.** Follow [`SETUP.md`](SETUP.md) for the one-command installer. It sets up the agent for you, and the agent walks you through your accounts and your first import.
 
 Standard actions (add transaction, import statement, add account) are meant to become **skills** — short, deterministic commands the agent runs in seconds instead of re-deriving the codebase each time. See `CLAUDE.md` → *Standard actions*.
 
@@ -60,29 +64,26 @@ Standard actions (add transaction, import statement, add account) are meant to b
 
 ## Importing bank statements
 
+The normal way is to hand the file to your agent — attach the CSV in the conversation and say "import this". It runs the steps below for you.
+
+By hand:
+
 ```bash
-# Drop your bank's CSV export into Statements/, then:
+# a single file, from anywhere — no folder needed
+python3 normalize.py --in ~/Downloads/statement.csv --out data/normalized.csv
+
+# or drop exports into Statements/ and let it pick them all up
 python3 normalize.py                 # Statements/*.csv → data/normalized.csv
+
 python3 import_csv.py --dry-run      # preview
 python3 import_csv.py                # write to the DB
 ```
-
-A single file works too, no folder needed: `python3 normalize.py --in ~/Downloads/statement.csv --out data/normalized.csv`.
 
 Re-imports are idempotent (dedup by row id) and additive, so overlapping statements are safe. Your manual edits live in a separate `tx_overrides` table and **survive re-imports**. Clearing and re-importing one statement is scoped to that file: `python3 import_csv.py --replace --replace-source-file Revolut.csv`.
 
 ### Adding a new bank
 
 Write `profiles/<yourbank>.json` describing the CSV's columns, date format, and decimal separator. Copy an existing profile (e.g. `profiles/revolut.json`) as a starting point. Categorization rules for all banks live in `rules/categorize.json`.
-
----
-
-## Deployment
-
-This is designed to run on **one box** where both the dashboard and the AI agent live together.
-
-- **Recommended: a VPS (e.g. Hetzner).** Real shell + persistent disk means the agent (Hermes or headless Claude Code) lives next to the data, reachable via Telegram or a desktop app. Front with Caddy for HTTPS; use systemd to keep `serve.py` always-on.
-- **Railway / container PaaS:** can host the *dashboard only*. Requires a **persistent Volume** mounted at `data/` (containers have ephemeral disks — otherwise your DB is wiped on every deploy). It does **not** give the AI agent a shell to live on, so the AI-control layer won't work there. Use only for a no-AI, dashboard-only setup.
 
 ---
 
