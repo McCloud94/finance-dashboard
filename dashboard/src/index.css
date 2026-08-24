@@ -389,6 +389,102 @@ a,
   font-variant-numeric: tabular-nums;
 }
 
+/* ─── Customizable selects ───────────────────────────────────────────────────
+   A native <select> hands its open list to the OS, so on macOS the popup is
+   drawn by AppKit — grey, system-blue highlight, unreachable from this file no
+   matter what `option { }` says. `appearance: base-select` pulls the picker
+   back into the page, where it inherits the same tokens as everything else.
+   Both halves must opt in: the select (the closed button) and ::picker(select)
+   (the open list).
+
+   Chrome 135+ / Safari 26+. Everywhere else the @supports block is skipped
+   whole and the OS popup stays — degraded, never broken. No JS, so the native
+   keyboard nav and a11y semantics are kept as-is.
+
+   Scoped to select.key, which is every select in the app (they all wear the
+   raised-key treatment); these rules sit outside @layer so they beat the
+   `appearance-none` utility the same elements carry.                         */
+@supports (appearance: base-select) {
+  select.key,
+  select.key::picker(select) {
+    appearance: base-select;
+  }
+
+  /* base-select adds a UA arrow; <Select> already draws its own ChevronDown,
+     and the TopBar month keys are deliberately unmarked */
+  select.key::picker-icon {
+    display: none;
+  }
+
+  /* base appearance turns the closed select into a flex container: content
+     centres horizontally (these are labels, keep them left) and sits at the
+     top of the h-9 box (align-items defaults to start), so both axes need
+     saying explicitly */
+  select.key {
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  select.key::picker(select) {
+    box-sizing: border-box;
+    min-width: anchor-size(width);
+    max-height: 20rem;
+    overflow-y: auto;
+    margin-top: 6px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-drop);
+    color: var(--text-normal);
+    font-family: var(--font-sans);
+    font-size: 13px;
+
+    /* allow-discrete so the list can fade instead of snapping: `overlay` and
+       `display` are discrete properties and would otherwise flip instantly */
+    opacity: 0;
+    transition:
+      opacity 120ms ease-out,
+      overlay 120ms allow-discrete,
+      display 120ms allow-discrete;
+  }
+  select.key:open::picker(select) {
+    opacity: 1;
+  }
+  @starting-style {
+    select.key:open::picker(select) {
+      opacity: 0;
+    }
+  }
+
+  select.key option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-normal);
+    cursor: pointer;
+  }
+  select.key option:hover,
+  select.key option:focus {
+    background: var(--bg-subtle);
+    outline: none;
+  }
+  select.key option:checked {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  /* the tick column stays reserved on every row so labels align whether or not
+     the row is the checked one */
+  select.key option::checkmark {
+    color: var(--accent);
+  }
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

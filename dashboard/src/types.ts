@@ -29,11 +29,19 @@ export interface Transaction {
   /** null for internal transfers and for rows awaiting review */
   category: string | null;
   account: string; // accounts.id
-  /** destination account when direction === 'internal'; informational only —
-   *  balances are moved by `flow` on the row's own account, never by this */
+  /** the other account when direction === 'internal'. Load-bearing: when the
+   *  transfer has no `counterpart` row, this is the account that gets the
+   *  mirrored movement. */
   transfer_to?: string | null;
   /** set iff direction === 'internal' */
   flow?: Flow | null;
+  /**
+   * id of the opposite leg of this transfer, when the ledger holds one — i.e.
+   * both banks exported the movement and it is already double-entered as two
+   * rows. Server-computed (ledger.pair_internal); null/absent means this row is
+   * the only record of the transfer and must move both accounts itself.
+   */
+  counterpart?: string | null;
   /**
    * Money coming back on a spend. A refund is an EXPENSE row that counts
    * negatively in its category — not income. Aggregates subtract it.
@@ -102,10 +110,24 @@ export interface Budget {
   planned_income: number;
 }
 
+/**
+ * A recurring date the Calendar marks — rent day, card due day, statement reset.
+ * Not a transaction: it moves no money and appears in no total. Configured in
+ * data/calendar.json and seeded into settings.cycle_markers, so changing what
+ * the calendar says never means editing a component.
+ */
+export interface CycleMarker {
+  day: number; // 1-31
+  label: string; // shown in the calendar cell
+  detail: string; // spelled out in the legend
+  tone: "due" | "info"; // due = money leaves today
+}
+
 export interface ApiData {
   transactions: Transaction[];
   accounts: Account[];
   categories: Category[];
   debts: Debt[];
   budget: Budget;
+  cycle_markers?: CycleMarker[];
 }

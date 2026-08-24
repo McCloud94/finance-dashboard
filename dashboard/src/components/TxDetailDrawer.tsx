@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { useApp } from "@/app-context";
 import type { Transaction } from "@/types";
-import { fmtEUR } from "@/lib/format";
+import { fmtEUR, todayDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -305,10 +305,32 @@ export function TxDetailDrawer({ tx, onClose }: Props) {
           <Badge>{tx.source ?? "—"}</Badge>
         </Row>
 
-        {tx.planned && (
+        {/* Imported rows are the bank's record of money that already moved, so
+            they are never plans — the server rejects the flip and there is
+            nothing to offer here. */}
+        {tx.source === "manual" && (
           <Row label="Status">
-            <Badge className="bg-accent-light text-accent">Planned</Badge>
+            {/* Ticked means it happened, so the box is bound to !planned: a real
+                entry reads as checked, and unticking it is the act of pushing it
+                back to a plan. The label follows the state rather than naming
+                what a click would assert. */}
+            <label className="flex items-center gap-2 text-[13px] text-gray-600">
+              <input
+                type="checkbox"
+                checked={!tx.planned}
+                onChange={(e) => save({ planned: !e.target.checked })}
+                className="accent-accent"
+              />
+              {tx.planned ? "Planned — not counted yet" : "Happened — counts as real"}
+            </label>
           </Row>
+        )}
+
+        {tx.source === "manual" && tx.planned && tx.date <= todayDate() && (
+          <p className="-mt-1 pb-2 text-xs text-gray-400">
+            Its date has passed and it is still planned, so it stays that way until you
+            say otherwise. Move the date forward to have it settle on its own again.
+          </p>
         )}
 
         <Row label="ID">

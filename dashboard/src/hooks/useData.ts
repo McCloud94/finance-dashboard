@@ -48,6 +48,8 @@ export interface TxEdit {
   amount?: number;
   date?: string;
   merchant?: string | null;
+  /** manual entries only — the server rejects it on imported rows */
+  planned?: boolean;
 }
 
 async function readError(res: Response): Promise<string> {

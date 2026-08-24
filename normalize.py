@@ -55,8 +55,9 @@ def load_profiles():
 def match_profile(header, profiles):
     """Pick the profile whose required headers are all present.
 
-    Sorted by specificity: mBank's account and credit exports share 4 of 5
-    columns, so the profile demanding the most columns must win.
+    Sorted by specificity: a bank's current-account and credit-card exports
+    often share 4 of 5 columns, so the profile demanding the most columns must
+    win.
     """
     cols = set(header)
     hits = [p for p in profiles if set(p["match"]["headers_all"]) <= cols]
@@ -151,8 +152,8 @@ def load_cat_types():
 def categorize(tx, merchants, cats):
     """Bank-agnostic pass: canonicalize merchant name, then assign category.
 
-    Runs AFTER profile rules so a bank-specific rule (e.g. mCredit 'SPLATKA' ->
-    internal) always wins over a generic merchant match.
+    Runs AFTER profile rules so a bank-specific rule (e.g. a card statement's
+    'REPAYMENT' -> internal) always wins over a generic merchant match.
     """
     if tx["direction"] == "internal":
         return
@@ -240,7 +241,7 @@ def normalize_file(path, profile, stats, merchants, cats):
                 "flow": "in" if amount > 0 else "out",
                 "account": profile["account"],
                 "transfer_to": "",
-                "category": "",
+                "category": pick(row, cols["category"]) if "category" in cols else "",
                 "refund": "",
                 "note": "",
                 "source_file": os.path.basename(path),
@@ -253,7 +254,8 @@ def normalize_file(path, profile, stats, merchants, cats):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--in", dest="indir", default=DEFAULT_IN)
+    ap.add_argument("--in", dest="indir", default=DEFAULT_IN,
+                    help="CSV file or directory containing CSV exports")
     ap.add_argument("--out", dest="outfile", default=DEFAULT_OUT)
     ap.add_argument("--report", action="store_true")
     args = ap.parse_args()
@@ -264,7 +266,10 @@ def main():
 
     merchants, cats = load_categorize()
     CAT_TYPES.update(load_cat_types())
-    files = sorted(glob.glob(os.path.join(args.indir, "*.csv")))
+    if os.path.isfile(args.indir):
+        files = [args.indir]
+    else:
+        files = sorted(glob.glob(os.path.join(args.indir, "*.csv")))
     all_tx, matched, unmatched = [], [], []
     stats = {}
 

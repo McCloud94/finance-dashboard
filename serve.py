@@ -5,7 +5,8 @@ Personal-OS dashboard server. Python stdlib only (http.server + sqlite3).
   GET   /api/data              → full snapshot {accounts, transactions, categories,
                                   budget, debts, projects, milestones, streaks, metrics}
   POST  /api/transaction       → add one transaction
-  PATCH /api/transaction/{id}   → edit one transaction (category/account/name/…)
+  PATCH /api/transaction/{id}   → edit one transaction (category/account/name/…),
+                                  or flip `planned` (manual entries only)
   POST  /api/account           → add account
   PATCH /api/debt/{id}          → update statement figures (due_amount, due_date)
   PATCH /api/budget/{category}  → set monthly_limit (null clears the budget)
@@ -25,9 +26,11 @@ import os
 import re
 import sqlite3
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
+
+from ledger import pair_internal
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE, "data")
@@ -46,6 +49,9 @@ VALID_DIRECTIONS = {"income", "expense", "internal"}
 # would reinsert the original alongside it as a duplicate.
 EDITABLE_TX_FIELDS = {"category", "account", "name", "note", "direction", "transfer_to",
                       "flow", "refund", "amount", "date", "merchant"}
+# `planned` is editable too but deliberately NOT in that set: it is the one
+# field written straight to the row instead of into tx_overrides. See
+# Store.set_planned for why an override would break the date sweep.
 VALID_FLOWS = {"in", "out"}
 # A credit card's outstanding balance is derived from its account's transactions,
 # so it is deliberately not editable here — only the statement figures are.
@@ -103,6 +109,7 @@ class Store:
         with self._conn() as c:
             budget_rows = self._rows(c.execute("SELECT category, monthly_limit FROM budget_limits"))
             planned = c.execute("SELECT value FROM settings WHERE key='planned_income'").fetchone()
+            markers = c.execute("SELECT value FROM settings WHERE key='cycle_markers'").fetchone()
             overrides = self._load_overrides(c)
             # tombstoned rows never reach the dashboard, and never reach any
             # aggregate computed from it
@@ -110,6 +117,18 @@ class Store:
                 """SELECT * FROM transactions
                    WHERE id NOT IN (SELECT id FROM tx_deleted)
                    ORDER BY date DESC, created_at DESC"""))
+            # Which internal rows already have their opposite leg in the ledger.
+            # Computed here, once, on the overlaid rows (an override can change
+            # flow/transfer_to and so change what pairs with what) and shipped as
+            # `counterpart` — the dashboard must not re-derive it, or the two
+            # definitions drift. See ledger.pair_internal.
+            overlaid = [self._overlay(t, overrides) for t in txs]
+            self._settle_due_planned(c, overlaid)
+            pairs = pair_internal(overlaid)
+            for t in overlaid:
+                if t["direction"] == "internal":
+                    t["counterpart"] = pairs.get(t["id"])
+
             return {
                 # `balance` is deliberately NOT sent. An account's balance is a
                 # pure SUM of its transactions, derived in the frontend from the
@@ -121,18 +140,100 @@ class Store:
                 # hand for the numbers to mean anything.)
                 "accounts": self._rows(c.execute(
                     "SELECT id, name, type, currency, meta FROM accounts ORDER BY name")),
-                "transactions": [self._overlay(t, overrides) for t in txs],
+                "transactions": overlaid,
                 "debts": self._rows(c.execute("SELECT * FROM debts ORDER BY kind, name")),
                 "categories": self._rows(c.execute("SELECT * FROM categories")),
                 "budget": {
                     "monthly": {r["category"]: r["monthly_limit"] for r in budget_rows},
                     "planned_income": float(planned["value"]) if planned else None,
                 },
+                # Recurring dates the calendar marks (rent, card due, statement
+                # reset). Config, not ledger rows — owned by data/calendar.json
+                # so anyone can change them without touching the frontend, which
+                # is where they used to be hardcoded.
+                "cycle_markers": json.loads(markers["value"]) if markers else [],
                 "projects": self._rows(c.execute("SELECT * FROM projects ORDER BY id")),
                 "milestones": self._rows(c.execute("SELECT * FROM milestones ORDER BY project_id, sort_order")),
                 "streaks": self._rows(c.execute("SELECT * FROM streaks")),
                 "metrics": self._rows(c.execute("SELECT * FROM metrics")),
             }
+
+    @staticmethod
+    def _settle_due_planned(c, overlaid):
+        """Turn planned entries into real ones once their date has arrived.
+
+        A planned entry is a payment you know is coming — rent on the 25th, a
+        subscription that bills itself. Left alone it stayed 'Planned' forever
+        and never counted, because nothing in the system ever cleared the flag.
+        Once its date is here the money has moved, so it should count; if it
+        genuinely did not, flip it back by hand (set_planned) and the sweep
+        stands down.
+
+        Run over the OVERLAID rows, not in SQL, because a dashboard edit to
+        `date` lives in tx_overrides — a `WHERE date <= today` against the base
+        table would settle on the imported date and ignore the one you can see.
+
+        The mirror of standing down is re-arming: a row you pushed back to a
+        future date is a plan again, so auto_settle returns to 1 rather than
+        staying suppressed for the rest of that row's life.
+        """
+        today = date.today().isoformat()
+        due, rearm = [], []
+        for t in overlaid:
+            if not t["planned"] or t["source"] != "manual":
+                continue
+            if t["date"] > today:
+                if not t["auto_settle"]:
+                    rearm.append((t["id"],))
+            elif t["auto_settle"]:
+                due.append((t["id"],))
+        if due:
+            c.executemany(
+                "UPDATE transactions SET planned=0, settled_at=datetime('now') WHERE id=?", due)
+            # SQLite's datetime('now') is UTC — match it, or the snapshot and the
+            # row disagree by the local offset
+            stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            settled = {i for (i,) in due}
+            # reflect it in the snapshot being built, so the response the
+            # dashboard renders matches what the DB now says
+            for t in overlaid:
+                if t["id"] in settled:
+                    t["planned"], t["settled_at"] = False, stamp
+        if rearm:
+            c.executemany("UPDATE transactions SET auto_settle=1 WHERE id=?", rearm)
+
+    def set_planned(self, tx_id, planned):
+        """Flip a row between Planned and real — written to the row, not tx_overrides.
+
+        Every other edit becomes an override because imported rows are derived
+        data that `import_csv.py --replace` rebuilds. `planned` is the exception
+        on both counts: only manual rows carry it (the importer always writes 0
+        and never rebuilds hand-typed rows), and _settle_due_planned writes the
+        base column. An override holding the opposite value would shadow that
+        write forever — the row would either never settle, or settle and
+        immediately look planned again.
+
+        Flipping back to Planned clears auto_settle so the sweep does not undo
+        you on the next page load. Flipping to real stamps settled_at, the same
+        marker the sweep leaves, so import_csv.py's reconcile step knows the
+        statement's own row for this payment may replace it.
+        """
+        with self._conn() as c:
+            row = c.execute("SELECT source FROM transactions WHERE id=?", (tx_id,)).fetchone()
+            if row is None:
+                return None
+            if row["source"] != "manual":
+                return "not-manual"
+            if planned:
+                c.execute(
+                    "UPDATE transactions SET planned=1, auto_settle=0, settled_at=NULL WHERE id=?",
+                    (tx_id,))
+            else:
+                c.execute(
+                    "UPDATE transactions SET planned=0, settled_at=datetime('now') WHERE id=?",
+                    (tx_id,))
+            base = dict(c.execute("SELECT * FROM transactions WHERE id=?", (tx_id,)).fetchone())
+            return self._overlay(base, self._load_overrides(c))
 
     def add_transaction(self, rec):
         with self._conn() as c:
@@ -536,10 +637,28 @@ class Handler(BaseHTTPRequestHandler):
         return self._send_json({"ok": True, "transaction": STORE.add_transaction(rec)})
 
     def _update_transaction(self, tx_id, body):
+        # `planned` takes the direct-write path, so it is handled before the
+        # override machinery and never mixed into `fields`.
+        if "planned" in body:
+            if not isinstance(body["planned"], bool):
+                return self._send_json({"error": "planned must be true or false"}, 400)
+            tx = STORE.set_planned(tx_id, body["planned"])
+            if tx is None:
+                return self._send_json({"error": "transaction not found"}, 404)
+            if tx == "not-manual":
+                # An imported row is the statement's record of money that already
+                # moved. Calling it 'planned' would remove real spending from
+                # every total, and the next import would put it back anyway.
+                return self._send_json(
+                    {"error": "only manually-added entries can be planned"}, 400)
+            if len(body) == 1:
+                return self._send_json({"ok": True, "transaction": tx})
+
         fields = {k: v for k, v in body.items() if k in EDITABLE_TX_FIELDS}
         if not fields:
             return self._send_json(
-                {"error": f"no editable fields; allowed: {sorted(EDITABLE_TX_FIELDS)}"}, 400)
+                {"error": f"no editable fields; allowed: {sorted(EDITABLE_TX_FIELDS | {'planned'})}"},
+                400)
 
         cat_type, accounts = STORE.reference()
         direction = fields.get("direction")

@@ -203,7 +203,11 @@ export function budgetVsActual(
       avg3: (avgTotals.get(id) ?? 0) / 3,
     });
   }
-  return rows.sort((a, b) => b.pct - a.pct);
+  // Alphabetical, deliberately — NOT by pct or spend. The cards are a grid you
+  // read positionally, and sorting by a figure that changes every month moved
+  // every card every time you stepped the month, so nothing could be compared
+  // across months without hunting for it first.
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export interface AccountBalance {
@@ -216,12 +220,7 @@ export interface AccountBalance {
 /**
  * What one transaction does to the balance of its OWN account.
  *
- * Mirrors BALANCE_SQL in reconcile_balances.py — keep the two in step.
- *
- * An internal row moves only the account it sits on, by `flow`. It deliberately
- * does NOT also credit `transfer_to`: where both ends export statements
- * (mBank ↔ mCredit) each side already contributes its own row, and crediting
- * the destination too would count every such transfer twice.
+ * Mirrors balance_delta() in ledger.py — keep the two in step.
  *
  * A `flow`-less internal row contributes 0. That is not a silent failure — the
  * server refuses to create one, and the importer derives it from the statement's
@@ -251,12 +250,24 @@ function balanceDelta(t: Transaction): number {
  * The gap is closed in the ledger instead. reconcile_balances.py writes one
  * `internal` row per account for exactly the missing opening amount, so the sum
  * lands on the real balance and keeps landing there as new statements arrive.
+ *
+ * Internal transfers move BOTH accounts unless the opposite leg is already a row
+ * of its own. `counterpart` is the server's answer to that question (see
+ * ledger.pair_internal): an account and its own bank's card both export the
+ * movement, so each row moves only itself; Revolut → Bybit and hand-typed
+ * transfers exist once, so they have to credit the destination too or the money
+ * simply disappears from the ledger.
  */
 export function accountBalances(accounts: Account[], txs: Transaction[]): AccountBalance[] {
   const sums = new Map<string, number>(accounts.map((a) => [a.id, 0]));
   for (const t of txs) {
-    if (!sums.has(t.account)) continue;
-    sums.set(t.account, sums.get(t.account)! + balanceDelta(t));
+    if (sums.has(t.account)) {
+      sums.set(t.account, sums.get(t.account)! + balanceDelta(t));
+    }
+    // the missing opposite leg of a one-sided transfer
+    if (t.direction !== "internal" || t.counterpart || !t.transfer_to) continue;
+    if (!sums.has(t.transfer_to)) continue;
+    sums.set(t.transfer_to, sums.get(t.transfer_to)! - balanceDelta(t));
   }
   // Overdrawn accounts must not eat into the share denominator, or a single
   // negative balance pushes every other account's share above 100%.

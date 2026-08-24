@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { TxDetailDrawer } from "@/components/TxDetailDrawer";
 import { useApp } from "@/app-context";
 import { fmtEUR0, fmtMonthLabel } from "@/lib/format";
-import type { Transaction } from "@/types";
+import type { CycleMarker, Transaction } from "@/types";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -19,23 +19,20 @@ function ordinal(n: number): string {
  * Fixed points in the monthly money cycle. These aren't transactions — they're
  * the recurring obligations the month is shaped around, so they're rendered as
  * day markers rather than being faked as planned rows in the ledger.
+ *
+ * They used to be a const in this file, which made the calendar describe one
+ * particular person's rent day and card cycle. They now come from the API
+ * (data/calendar.json → settings.cycle_markers), so changing them is an edit to
+ * a data file, not to a component.
  */
-const CYCLE_MARKERS: Record<number, { label: string; detail: string; tone: "due" | "reset" }> = {
-  25: {
-    label: "Rent + card due",
-    detail: "Send money to mBank: rent €915 + card due. Pay back the card.",
-    tone: "due",
-  },
-  3: {
-    label: "Statement resets",
-    detail: "Card statement resets → cash out limit to Revolut → Bybit for daily spend.",
-    tone: "reset",
-  },
-};
-
 export function CalendarView() {
   const { data, monthKey, openAddEntry } = useApp();
   const { transactions } = data;
+  const markersByDay = useMemo(() => {
+    const map = new Map<number, CycleMarker>();
+    for (const m of data.cycle_markers ?? []) map.set(m.day, m);
+    return map;
+  }, [data.cycle_markers]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(
     () => transactions.find((t) => t.id === selectedId) ?? null,
@@ -82,7 +79,7 @@ export function CalendarView() {
             if (day === null) return <div key={i} className="min-h-[110px] border-b border-r border-gray-200 bg-gray-100/40" />;
             const dateStr = `${monthKey}-${String(day).padStart(2, "0")}`;
             const entries = byDay.get(day) ?? [];
-            const marker = CYCLE_MARKERS[day];
+            const marker = markersByDay.get(day);
             return (
               <div
                 key={i}
@@ -156,17 +153,19 @@ export function CalendarView() {
       </Card>
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-400">
-        {Object.entries(CYCLE_MARKERS).map(([day, m]) => (
-          <span key={day} className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                m.tone === "due" ? "bg-expense" : "bg-accent",
-              )}
-            />
-            <span className="text-ink">{ordinal(Number(day))}</span> — {m.detail}
-          </span>
-        ))}
+        {[...markersByDay.values()]
+          .sort((a, b) => a.day - b.day)
+          .map((m) => (
+            <span key={m.day} className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  m.tone === "due" ? "bg-expense" : "bg-accent",
+                )}
+              />
+              <span className="text-ink">{ordinal(m.day)}</span> — {m.detail}
+            </span>
+          ))}
       </div>
 
       <TxDetailDrawer tx={selected} onClose={() => setSelectedId(null)} />

@@ -27,7 +27,7 @@ Then walk them through this, **one step at a time, waiting for each answer**:
 
 3. **Import history (optional but recommended).**
    > "If you export a CSV statement from your bank and drop it in the `Statements/` folder, I'll import all your past transactions at once. Want to do that now, or skip and just tell me spending as it happens?"
-   - If yes → tell them exactly where the folder is (`<project>/Statements/`), wait, then run the import (CLAUDE.md → *Importing a bank statement*). If their bank isn't recognized, handle the profile yourself — never make them write JSON.
+   - If yes → tell them exactly where the folder is (`<project>/Statements/`), wait, then run the import (CLAUDE.md → *Importing a bank statement*). A file they hand you directly works just as well — `normalize.py --in <file>` — and can be deleted afterwards. If their bank isn't recognized, handle the profile yourself — never make them write JSON.
 
 4. **Show them it works.** Open the dashboard in their browser so they SEE it:
    ```bash

@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Fixed points in your monthly money cycle — rent day, card due date, payday,",
+    "a subscription that always lands on the 14th. They are NOT transactions:",
+    "nothing here touches a balance or a total. They are day markers on the",
+    "Calendar view, so the shape of the month is visible before the rows arrive.",
+    "",
+    "Edit this file (or ask your AI to), then re-run: python3 init_db.py",
+    "",
+    "  day    1-31, the day of every month the marker sits on",
+    "  label  short text shown inside the calendar cell",
+    "  detail one line spelled out in the legend under the calendar",
+    "  tone   'due'  = money must leave on this day (red)",
+    "         'info' = something resets or arrives (accent)",
+    "",
+    "The two below are examples. Replace them with your own."
+  ],
+  "markers": [
+    {
+      "day": 1,
+      "label": "Recurring expense",
+      "detail": "Recurring expense. Ask your AI to add or change this.",
+      "tone": "due"
+    },
+    {
+      "day": 15,
+      "label": "Payday",
+      "detail": "Money arrives. Ask your AI to add or change this.",
+      "tone": "info"
+    }
+  ]
+}

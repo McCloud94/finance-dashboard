@@ -42,31 +42,14 @@ import sqlite3
 import sys
 from datetime import date, timedelta
 
+from ledger import account_balances
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE, "data", "data.db")
 ACCOUNTS_JSON = os.path.join(BASE, "data", "accounts.json")
 
 ADJUST_PREFIX = "opening|"
 ADJUST_NAME = "Opening balance"
-
-# The one definition of how a transaction moves money on its own account.
-# Mirrored in dashboard/src/lib/aggregate.ts — keep the two in step.
-#
-# An internal row only ever moves ITS OWN account. It deliberately does not also
-# credit `transfer_to`: where both accounts export statements (mBank <-> mCredit)
-# each side already has its own row, and crediting the destination as well would
-# count every such transfer twice.
-BALANCE_SQL = """
-SUM(CASE
-  WHEN planned = 1                                THEN 0
-  WHEN direction = 'income'                       THEN amount
-  WHEN direction = 'expense' AND refund = 1       THEN amount
-  WHEN direction = 'expense'                      THEN -amount
-  WHEN direction = 'internal' AND flow = 'in'     THEN amount
-  WHEN direction = 'internal' AND flow = 'out'    THEN -amount
-  ELSE 0
-END)
-"""
 
 
 def targets():
@@ -85,8 +68,31 @@ def targets():
         }
 
 
-def derived(cur, account, as_of):
-    """Balance from transactions up to `as_of`.
+def ledger_rows(conn):
+    """Every live transaction, with dashboard edits overlaid.
+
+    Overrides are applied because they can change the fields balances are built
+    from — a row re-typed from `expense` to `internal`, or given the `flow` the
+    statement did not carry, moves money differently. Reconciling against the raw
+    import would diff against a ledger the dashboard never shows.
+    """
+    conn.row_factory = sqlite3.Row
+    overrides = {
+        r["id"]: json.loads(r["fields"])
+        for r in conn.execute("SELECT id, fields FROM tx_overrides")
+    }
+    rows = []
+    for r in conn.execute(
+        "SELECT * FROM transactions WHERE id NOT IN (SELECT id FROM tx_deleted)"
+    ):
+        t = dict(r)
+        t.update(overrides.get(t["id"], {}))
+        rows.append(t)
+    return rows
+
+
+def derived(rows, accounts, as_of):
+    """Balances from `rows` up to `as_of`, transfer pairing applied.
 
     Two exclusions, both load-bearing:
       - our own adjustment rows, or the second run would reconcile against its
@@ -95,12 +101,12 @@ def derived(cur, account, as_of):
         claimed to include. Counting it would make real transactions look like
         drift and get them cancelled out by the adjustment.
     """
-    row = cur.execute(
-        f"SELECT COALESCE({BALANCE_SQL}, 0) FROM transactions "
-        "WHERE account = ? AND id NOT LIKE ? AND date <= ?",
-        (account, ADJUST_PREFIX + "%", as_of),
-    ).fetchone()
-    return round(row[0], 2)
+    return account_balances(
+        rows,
+        account_ids=accounts,
+        as_of=as_of,
+        exclude_ids=[t["id"] for t in rows if str(t["id"]).startswith(ADJUST_PREFIX)],
+    )
 
 
 def opening_date(cur, account):
@@ -130,13 +136,16 @@ def main():
     cur = conn.cursor()
 
     known = {r[0] for r in cur.execute("SELECT id FROM accounts")}
+    txs = ledger_rows(conn)
     rows, cleared = [], []
 
     for account, (target, as_of) in sorted(targets().items()):
         if account not in known:
             print(f"  skip {account}: not an account in the DB")
             continue
-        have = derived(cur, account, as_of)
+        # every account is passed in, not just this one: an unpaired transfer
+        # out of another account is part of THIS account's balance
+        have = derived(txs, known, as_of)[account]
         diff = round(target - have, 2)
         adj_id = ADJUST_PREFIX + account
 

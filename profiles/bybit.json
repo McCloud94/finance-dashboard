@@ -14,7 +14,8 @@
       "col": "Total Transaction Amount",
       "decimal": ".",
       "sign": "native"
-    }
+    },
+    "category": { "col": "Category" }
   },
   "rules": []
 }

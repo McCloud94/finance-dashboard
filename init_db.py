@@ -65,7 +65,19 @@ CREATE TABLE IF NOT EXISTS transactions (
     refund     INTEGER DEFAULT 0,         -- 0/1
     note       TEXT,
     source     TEXT DEFAULT 'manual',     -- manual | import
-    planned    INTEGER DEFAULT 0,         -- 0/1
+    source_file TEXT,                      -- normalized statement filename for scoped replacement
+    planned    INTEGER DEFAULT 0,           -- 0/1
+    -- May the date sweep in serve.py settle this planned row when its date
+    -- arrives? Cleared when you flip a row back to Planned by hand — that is
+    -- you overruling the sweep, so the sweep must not overrule you back on the
+    -- next page load. Re-armed automatically once the row's date is future again.
+    auto_settle INTEGER DEFAULT 1,          -- 0/1
+    -- When this manual row stopped being a plan and started counting as real
+    -- money (by the sweep or by hand). NULL for every row that was never a plan.
+    -- It is the marker import_csv.py's reconcile step matches on: the statement
+    -- row for the same payment will not dedup by id (see reconcile_settled), so
+    -- only rows that were once planned may be replaced by an imported one.
+    settled_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_tx_cat_date  ON transactions(category, date);
@@ -183,6 +195,9 @@ def read_json(name, default):
 MIGRATIONS = [
     ("transactions", "flow", "TEXT"),
     ("transactions", "refund", "INTEGER DEFAULT 0"),
+    ("transactions", "source_file", "TEXT"),
+    ("transactions", "auto_settle", "INTEGER DEFAULT 1"),
+    ("transactions", "settled_at", "TEXT"),
 ]
 
 
@@ -289,6 +304,25 @@ def seed(conn):
             "INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)",
             ("planned_income", str(budget["planned_income"])),
         )
+
+    # calendar cycle markers → settings.cycle_markers
+    # Pure config owned by the seed file, so unlike planned_income this is
+    # REPLACEd on every run: editing data/calendar.json and re-seeding is the
+    # documented way to change what the calendar marks.
+    markers = [
+        {
+            "day": int(m["day"]),
+            "label": str(m.get("label", "")),
+            "detail": str(m.get("detail", "")),
+            "tone": "due" if m.get("tone") == "due" else "info",
+        }
+        for m in (read_json("calendar.json", {}).get("markers") or [])
+        if 1 <= int(m.get("day", 0)) <= 31
+    ]
+    cur.execute(
+        "INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)",
+        ("cycle_markers", json.dumps(markers)),
+    )
 
     conn.commit()
 

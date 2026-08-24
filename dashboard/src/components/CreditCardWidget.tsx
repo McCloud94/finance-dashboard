@@ -92,7 +92,12 @@ function StatementEditor({
   );
 }
 
-export function CreditCardWidget() {
+/**
+ * `className` replaces the default wrapper grid. Accounts passes "contents" so
+ * the cards become items of ITS grid and can sit beside net worth; on its own
+ * (Debt view) the widget still lays itself out.
+ */
+export function CreditCardWidget({ className }: { className?: string } = {}) {
   const { data } = useApp();
   const cards = useMemo(
     () => creditCards(data.debts ?? [], todayDate(), data.accounts, data.transactions),
@@ -107,7 +112,7 @@ export function CreditCardWidget() {
   if (cards.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className={className ?? "grid grid-cols-1 gap-4 lg:grid-cols-2"}>
       {cards.map(({ debt, outstanding, due, available, utilization, daysToDue, dueStale }) => {
         const label = dueLabel(daysToDue);
         const pct = Math.min(1, utilization);

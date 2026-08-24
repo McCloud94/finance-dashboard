@@ -4,8 +4,9 @@ A local-first personal finance dashboard, **controlled by an AI agent**. You tal
 
 - **Your data stays yours.** One SQLite file on your machine. No cloud account, no signup, no API keys.
 - **Zero backend dependencies.** The server is Python standard library only.
-- **Bank-agnostic import.** Adding support for a new bank = writing one small JSON profile, never touching code. Ships with profiles for Revolut, Wise, mBank, and Bybit.
+- **Bank-agnostic import.** Adding support for a new bank = writing one small JSON profile, never touching code. Ships with profiles for Revolut, Wise, and Bybit.
 - **Runs offline.** Everything is on `localhost`.
+- **Plan ahead.** Mark a payment you know is coming as planned; it stays out of your totals until its date arrives, then counts itself — and steps aside when the bank's own row for it turns up.
 
 ---
 
@@ -63,10 +64,12 @@ Standard actions (add transaction, import statement, add account) are meant to b
 # Drop your bank's CSV export into Statements/, then:
 python3 normalize.py                 # Statements/*.csv → data/normalized.csv
 python3 import_csv.py --dry-run      # preview
-python3 import_csv.py --replace      # write to the DB
+python3 import_csv.py                # write to the DB
 ```
 
-Re-imports are idempotent (dedup by row id). Your manual edits live in a separate `tx_overrides` table and **survive re-imports**.
+A single file works too, no folder needed: `python3 normalize.py --in ~/Downloads/statement.csv --out data/normalized.csv`.
+
+Re-imports are idempotent (dedup by row id) and additive, so overlapping statements are safe. Your manual edits live in a separate `tx_overrides` table and **survive re-imports**. Clearing and re-importing one statement is scoped to that file: `python3 import_csv.py --replace --replace-source-file Revolut.csv`.
 
 ### Adding a new bank
 
@@ -90,13 +93,15 @@ This is designed to run on **one box** where both the dashboard and the AI agent
 | `serve.py` | HTTP API (`/api/*`) + static file serving. `Store` class = all DB access. |
 | `init_db.py` | Creates schema, seeds reference data from `data/*.json`. `--reset` drops everything. |
 | `normalize.py` | Profile-driven CSV → unified `normalized.csv`. |
-| `import_csv.py` | `normalized.csv` → SQLite. `--dry-run`, `--replace`. |
+| `import_csv.py` | `normalized.csv` → SQLite. Additive + deduplicating; `--dry-run`, scoped `--replace-source-file`. |
 | `reconcile_balances.py` | Reconcile derived balances against an as-of statement figure. |
-| `profiles/*.json` | Per-bank CSV format definitions (Revolut, Wise, mBank ×2, Bybit). |
+| `ledger.py` | The one definition of how a transaction moves money (transfer pairing, balances). |
+| `profiles/*.json` | Per-bank CSV format definitions (Revolut, Wise, Bybit). |
 | `rules/categorize.json` | Merchant canonicalization + category mapping (starter set — edit freely). |
 | `data/*.json` | Reference seed data (accounts, categories, budget, debts). |
 | `dashboard/` | React + Vite + Tailwind frontend source. |
 | `dist/` | Pre-built frontend served by `serve.py`. |
+| `tests/` | `python3 -m unittest discover -s tests` — transfer pairing, planned-entry sweep, import safety. |
 
 ---
 

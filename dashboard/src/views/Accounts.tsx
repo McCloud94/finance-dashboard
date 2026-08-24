@@ -41,11 +41,16 @@ export function AccountsView() {
     [transactions, categories, year],
   );
   const incomeYtd = useMemo(() => byYear(transactions, year).income, [transactions, year]);
+  const hasCard = debts.some((d) => d.kind === "credit_card");
   const maxChannel = Math.max(1, ...channelsYtd.map((c) => c.value));
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
+      {/* Net worth and the cards read as one row: the summary on the left, what
+          is drawn against it on the right. With no credit card at all, net worth
+          takes the full width rather than leaving half the row empty. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card className={cn(!hasCard && "lg:col-span-2")}>
         <CardContent className="p-8">
           <div className="text-[13px] font-medium text-gray-600">Net worth</div>
           <div className={cn("tnum text-[40px] font-bold leading-tight", nw < 0 && "text-expense")}>
@@ -65,7 +70,8 @@ export function AccountsView() {
         </CardContent>
       </Card>
 
-      <CreditCardWidget />
+      <CreditCardWidget className="contents" />
+      </div>
 
       <div>
         <div className="mb-3 flex items-baseline justify-between">
@@ -83,7 +89,9 @@ export function AccountsView() {
                   <span
                     className={cn(
                       "tnum text-[24px] font-bold",
-                      a.balance < 0 && "text-expense",
+                      // matches fmtEUR0's rounding — a −0.40 balance prints as
+                      // "€0", so colouring it as debt would contradict the number
+                      a.balance <= -0.5 && "text-expense",
                     )}
                   >
                     {fmtEUR0(a.balance)}

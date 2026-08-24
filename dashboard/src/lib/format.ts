@@ -12,9 +12,17 @@ const eur0 = new Intl.NumberFormat("en-IE", {
   maximumFractionDigits: 0,
 });
 
+/**
+ * A tiny negative balance (−0.40) or a negative zero rounds to "−€0", which
+ * reads as a debt that isn't there. Once the display rounding has eaten the
+ * magnitude, the sign carries no information — drop it.
+ */
+const dropSignIfRoundsToZero = (n: number, decimals: number): number =>
+  Math.abs(n) < 0.5 / 10 ** decimals ? 0 : n;
+
 /** Single source of EUR formatting. Pass cents=false for whole-euro display. */
 export function fmtEUR(n: number, cents = true): string {
-  return (cents ? eur : eur0).format(n);
+  return cents ? eur.format(dropSignIfRoundsToZero(n, 2)) : fmtEUR0(n);
 }
 
 /**
@@ -26,7 +34,8 @@ export function fmtEUR(n: number, cents = true): string {
  * compare at a glance. Ledger-level views keep cents, because there the exact
  * figure is the point.
  */
-export const fmtEUR0 = (n: number): string => eur0.format(n);
+export const fmtEUR0 = (n: number): string =>
+  eur0.format(dropSignIfRoundsToZero(n, 0));
 
 /** Signed delta with sign prefix, e.g. "+12.5%" */
 export function fmtPct(n: number): string {
