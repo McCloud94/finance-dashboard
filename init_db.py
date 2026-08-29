@@ -246,15 +246,51 @@ def migrate(conn):
     conn.commit()
 
 
+def prune_categories(cur, keep):
+    """Drop categories removed from categories.json — but only unused ones.
+
+    Deleting a category that transactions still point at would strand their
+    spend: the rows survive with a dangling reference and stop appearing under
+    any category in the dashboard. So an in-use category is kept and reported
+    instead, and the fix (recategorize those rows, or delete them) stays the
+    operator's call. Same rule the DELETE /api/category endpoint enforces.
+    """
+    stale = [r[0] for r in cur.execute("SELECT id FROM categories") if r[0] not in keep]
+    if not stale:
+        return
+    used_overrides = {
+        json.loads(r[0]).get("category") for r in cur.execute("SELECT fields FROM tx_overrides")
+    }
+    for cid in stale:
+        n = cur.execute("SELECT COUNT(*) FROM transactions WHERE category=?", (cid,)).fetchone()[0]
+        if n or cid in used_overrides:
+            print(f"  kept: category '{cid}' was removed from categories.json but "
+                  f"{n} transaction(s) still use it — recategorize them first")
+            continue
+        cur.execute("DELETE FROM budget_limits WHERE category=?", (cid,))
+        cur.execute("DELETE FROM categories WHERE id=?", (cid,))
+        print(f"  removed: category '{cid}' (gone from categories.json, unused)")
+
+
 def seed(conn):
     cur = conn.cursor()
 
-    # categories
-    for c in read_json("categories.json", []):
+    # categories. Name/colour/type are config the seed file owns, so a re-run
+    # picks up a rename or a recolour — the same contract accounts already had.
+    # Without the UPDATE, editing categories.json did nothing on an existing DB:
+    # INSERT OR IGNORE quietly kept the old row and the file and the dashboard
+    # drifted apart with nothing reporting it.
+    seeded = read_json("categories.json", [])
+    for c in seeded:
         cur.execute(
             "INSERT OR IGNORE INTO categories (id,name,color,type) VALUES (?,?,?,?)",
             (c["id"], c["name"], c.get("color"), c["type"]),
         )
+        cur.execute(
+            "UPDATE categories SET name=?, color=?, type=? WHERE id=?",
+            (c["name"], c.get("color"), c["type"], c["id"]),
+        )
+    prune_categories(cur, {c["id"] for c in seeded})
 
     # accounts.
     for a in read_json("accounts.json", []):

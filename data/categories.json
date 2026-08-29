@@ -48,8 +48,8 @@
     "type": "expense"
   },
   {
-    "id": "ai",
-    "name": "AI",
+    "id": "trading",
+    "name": "trading",
     "color": "#37b05f",
     "type": "income"
   },
@@ -57,24 +57,6 @@
     "id": "job",
     "name": "Job",
     "color": "#3b7197",
-    "type": "income"
-  },
-  {
-    "id": "sell",
-    "name": "Sell",
-    "color": "#cd9a3b",
-    "type": "income"
-  },
-  {
-    "id": "prop_firms",
-    "name": "Prop Firms",
-    "color": "#931037",
-    "type": "income"
-  },
-  {
-    "id": "bybit_income",
-    "name": "Bybit",
-    "color": "#a97a28",
     "type": "income"
   },
   {
