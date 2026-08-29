@@ -22,11 +22,33 @@ The manual below stays the source of truth for ops/import; skills point back to 
 
 ## Starting / stopping
 
+**Always start the server with `./start.sh`. Never with `python3 serve.py &`.**
+
 ```bash
-python3 init_db.py        # first run only — create schema + seed
-python3 serve.py          # start server (port 8787). Run in background if the user needs it persistent.
+./start.sh                # start (idempotent — says so if it is already up)
+./start.sh --status       # is it up?
+./stop.sh                 # stop it
 ```
+
+`start.sh` creates the database on first run, launches the server detached with
+`nohup` (own process group where the OS has `setsid`), writes `data/server.pid`
+and `data/server.log`, and does not report success until `GET /api/data`
+actually answers.
+
+This matters, and it is the one setup mistake that keeps getting made: a bare
+`python3 serve.py &` from a tool call, a setup script, or an SSH command is a
+**child of that shell**. The health check passes, you report the dashboard is
+running, and the process dies the moment your session ends — the user opens the
+link ten minutes later and gets a connection error. `start.sh` is what makes
+"it started" and "it is still up tomorrow" the same statement.
+
+If you cannot run `start.sh` (no shell on the user's machine), tell them to run
+it themselves — do not substitute a backgrounded command of your own.
+
 Check it's up: `curl -s http://127.0.0.1:8787/api/data | head -c 200`
+
+On a server, `docker compose up -d` already runs it as a restart-on-reboot
+container; `start.sh` is for the local tier.
 
 ## Standard actions
 
@@ -53,12 +75,32 @@ Editable: category, account, name, note, direction, transfer_to, flow, refund, a
 **Add an account**
 ```bash
 curl -s -X POST http://127.0.0.1:8787/api/account -H 'Content-Type: application/json' \
-  -d '{"id":"n26","name":"N26","currency":"EUR","type":"bank","balance":0}'
+  -d '{"name":"N26","currency":"EUR","type":"bank"}'
 ```
+`type`: `bank` | `cash` | `credit` | `broker` | `crypto` | `prop_firm`. The id is slugified from the name; a taken id is a 409, not a silent overwrite. **Do not pass a starting balance** — balances are summed from transactions, so book the opening amount as one `internal` row instead (`{"direction":"internal","flow":"in","account":"<id>","name":"Opening balance", …}`, no `transfer_to`). Booking it as income would put the user's existing savings into this month's earnings.
+
+**Delete an account**: `DELETE /api/account/<id>`. Refused with 409 while transactions reference it or a debt is mapped to it; the error names what is in the way.
 
 **Set a budget**: `PATCH /api/budget/<category>` body `{"monthly_limit":300}` (null clears).
 
-**Update a debt/credit-card statement figure**: `PATCH /api/debt/<id>` body `{"due_amount":450,"due_date":"2026-01-25"}`.
+**Add a budget item** (= a category; a budget is a limit ON a category, so the category has to exist first)
+```bash
+curl -s -X POST http://127.0.0.1:8787/api/category -H 'Content-Type: application/json' \
+  -d '{"name":"Pets","type":"expense","monthly_limit":60}'
+```
+
+**Delete a category**: `DELETE /api/category/<id>` — takes its budget row with it. Refused with 409 while any transaction uses it (recategorize them first, or just clear the limit).
+
+**Add a debt**
+```bash
+curl -s -X POST http://127.0.0.1:8787/api/debt -H 'Content-Type: application/json' \
+  -d '{"name":"Loan from Mum","kind":"loan","counterparty":"Mum","balance":300}'
+```
+`kind`: `loan` | `owed_to_me` | `credit_card`. A `credit_card` **must** carry `account` (an account of type `credit`) — its outstanding is derived from that account's transactions, and its stored `balance` is pinned at 0 and never read.
+
+**Update a debt**: `PATCH /api/debt/<id>` — `due_amount`, `due_date`, `name`, `counterparty`, `credit_limit`, `note`, and `balance`. `balance` is how a loan gets paid down; it is **rejected on a credit card** (derived, see above).
+
+**Delete a debt**: `DELETE /api/debt/<id>`. Transactions and the linked account are untouched.
 
 **Change what the Calendar marks** (rent day, card due day, statement reset — recurring dates, not transactions): edit `data/calendar.json`, then `python3 init_db.py` to re-seed. Each marker is `{day, label, detail, tone}` with `tone` = `due` (money leaves) or `info`. These are config, not ledger rows — they move no balance and appear in no total. Never hardcode them in the frontend.
 
@@ -87,7 +129,7 @@ python3 import_csv.py                # additive, deduplicating commit
   It deletes only imported rows whose stored `source_file` matches. Plain `--replace` is rejected — it used to wipe every imported row.
 - If `normalize.py --report` shows an unmatched file, the bank has no profile → write `profiles/<bank>.json` (copy `profiles/revolut.json`). Bank-specific knowledge is **data, never code**.
 - Categorization for all banks: `rules/categorize.json` (merchant regex → clean name → category).
-- Ships with profiles for `revolut`, `wise`, `bybit`.
+- Ships with profiles for `revolut` and `wise`.
 
 ## Planned entries and how they become real
 

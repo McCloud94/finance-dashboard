@@ -9,7 +9,7 @@ The full, authoritative procedure lives in the dashboard project's `CLAUDE.md` �
 
 ## Fast path
 
-Server up (`python3 serve.py`, port 8787). Use the HTTP API — it validates and keeps balances consistent. Never hand-edit `data/data.db`.
+Server up — `./start.sh` (never `python3 serve.py &`, which dies with your shell); `./start.sh --status` to check. Use the HTTP API — it validates and keeps balances consistent. Never hand-edit `data/data.db`.
 
 Common: "add -30 food, account revolut" →
 ```bash
@@ -20,7 +20,7 @@ curl -s -X POST http://127.0.0.1:8787/api/transaction \
 
 Before writing:
 - `category` must exist in `data/categories.json` AND its type match `direction` (expense category for an expense).
-- `account` must exist in `data/accounts.json`.
+- `account` must exist (see `GET /api/data` → `accounts`). New accounts, debts and categories are created through the API — `POST /api/account`, `POST /api/debt`, `POST /api/category` — and deleted with the matching `DELETE`; the user can do all three in the dashboard too.
 - If the user names a category/account that doesn't exist → add it first, or ask. Never invent ids or amounts.
 - `internal` = transfer between own accounts: use `flow`:`in`|`out` + `transfer_to`, no category.
 

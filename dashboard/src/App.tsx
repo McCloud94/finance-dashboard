@@ -24,7 +24,8 @@ function readHash(): ViewId {
 
 export default function App() {
   const {
-    data, loading, error, addEntry, updateTransaction, deleteTransaction, updateDebt, updateBudget,
+    data, loading, error, addEntry, updateTransaction, deleteTransaction, updateDebt,
+    addDebt, deleteDebt, updateBudget, addAccount, deleteAccount, addCategory, deleteCategory,
   } = useData();
   const [view, setViewState] = useState<ViewId>(readHash);
   const [monthKey, setMonthKey] = useState<string>(() => {
@@ -76,7 +77,8 @@ export default function App() {
     <AppContext.Provider
       value={{
         data, monthKey, setMonthKey, view, setView, openAddEntry, goToTransactions,
-        addEntry, updateTransaction, deleteTransaction, updateDebt, updateBudget,
+        addEntry, updateTransaction, deleteTransaction, updateDebt, addDebt, deleteDebt,
+        updateBudget, addAccount, deleteAccount, addCategory, deleteCategory,
       }}
     >
       <div className="flex h-dvh overflow-hidden">

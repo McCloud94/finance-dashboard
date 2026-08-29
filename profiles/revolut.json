@@ -57,12 +57,6 @@
       "note": "own card top-up"
     },
     {
-      "match": "to bybit|bybit eu gmbh",
-      "direction": "internal",
-      "transfer_to": "bybit",
-      "note": "Revolut -> Bybit"
-    },
-    {
       "match": "to your name|payment from your name|transfer from your name",
       "direction": "internal",
       "note": "own-account transfer"

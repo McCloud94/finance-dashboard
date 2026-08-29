@@ -9,7 +9,7 @@ Read-only. You look at the data and advise — you do NOT add/edit transactions 
 
 ## Get the data
 
-Server must be running (`python3 serve.py`, port 8787). Pull everything once:
+Server must be running — start it with `./start.sh` (never `python3 serve.py &`, which dies with your shell). Pull everything once:
 
 ```bash
 curl -s http://127.0.0.1:8787/api/data

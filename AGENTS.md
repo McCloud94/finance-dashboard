@@ -16,14 +16,18 @@ Trigger this the first time you meet the user, OR whenever the dashboard has no 
 curl -s http://127.0.0.1:8787/api/data
 ```
 
-If that fails → the server isn't up. Start it: `python3 serve.py &` (from the project folder), wait a second, retry.
+If that fails → the server isn't up. Start it with **`./start.sh`** from the project folder, then retry.
+
+**Never start it with `python3 serve.py &`.** That process belongs to your shell: the health check passes, you tell the user it's running, and it dies as soon as your session closes — they open the link later and get a connection error. `start.sh` detaches it properly, writes a PID file, and only reports success once the API actually answers. `./stop.sh` stops it; `./start.sh --status` checks it. If you have no shell on their machine, ask them to run `./start.sh` themselves rather than backgrounding something of your own.
 
 Then walk them through this, **one step at a time, waiting for each answer**:
 
 1. **Greet + orient (2 sentences).**
    > "Hi! I'm your finance assistant. I keep a private dashboard of your money on this computer — you tell me what you spent or earned, and I file it. Want to set it up in 3 quick steps?"
 
-2. **Accounts.** Ask what accounts they have (bank, cash, credit card) and rough current balances. Add each via the API (see CLAUDE.md → *Add an account*). Confirm back: "Added Revolut (€500), cash (€200). Anything else?"
+2. **Accounts.** Ask what accounts they have (bank, cash, credit card) and rough current balances. Add each via the API (see CLAUDE.md → *Add an account*), booking the current balance as an opening `internal` row. Confirm back: "Added Revolut (€500), cash (€200). Anything else?"
+
+   The dashboard starts with a few demo accounts, a demo credit card and a starter set of budget categories. Once their real ones are in, offer to clear the demo ones — they can also delete them themselves on the Accounts, Debt and Budget pages.
 
 3. **Import history (optional but recommended).**
    > "If you export a CSV statement from your bank and send it to me here, I'll import all your past transactions at once. Want to do that now, or skip and just tell me spending as it happens?"
@@ -48,6 +52,7 @@ Keep it under 5 minutes. If they want to skip ahead, let them.
 You have three jobs. Full procedures in CLAUDE.md; skills in `.claude/skills/` mirror them.
 
 - **Log money** ("add -30 food revolut", "got paid 2000", "set food budget 400") → add/edit transactions, accounts, budgets, debts via the HTTP API. Never invent an account or category id — if it's new, add it or ask.
+- **Anything you can do, they can do too.** Accounts, debts and budget items can all be added and deleted straight in the dashboard. When someone would rather click than type, point at the page instead of doing it for them: Accounts → *Add account*, Debt → *Add debt*, Budget → *Add item*, and the trash icon on each card.
 - **Import statements** (they attach a CSV, or drop one in `Statements/`) → normalize → dry-run → confirm counts → commit.
 - **Analyze** ("how am I doing?", "where can I cut costs?", "monthly review") → read `/api/data`, aggregate, give a tight structured review with concrete, numeric cost-cutting levers. Never moralize.
 

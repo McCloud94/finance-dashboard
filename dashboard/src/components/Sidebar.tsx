@@ -1,4 +1,4 @@
-import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { Banknote, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useApp } from "@/app-context";
 import { VIEW_DEFS } from "@/lib/views";
 import { cn } from "@/lib/utils";
@@ -61,11 +61,14 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
           collapsed ? "w-[68px]" : "w-56",
         )}
       >
-        <div className={cn("pb-6", collapsed ? "text-center" : "px-3")}>
+        <div className={cn("pb-6", collapsed ? "flex justify-center" : "px-3")}>
           {collapsed ? (
-            <div className="text-[15px] font-bold text-accent">F</div>
+            <Banknote size={20} strokeWidth={1.75} className="text-accent" aria-label="Finance Bro" />
           ) : (
-            <div className="text-[15px] font-semibold tracking-tight">Finances</div>
+            <div className="flex items-center gap-2">
+              <Banknote size={18} strokeWidth={1.75} className="shrink-0 text-accent" />
+              <span className="text-[15px] font-semibold tracking-tight">Finance Bro</span>
+            </div>
           )}
         </div>
 
@@ -100,7 +103,10 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
           />
           <aside className="pt-safe pb-safe absolute inset-y-0 left-0 flex w-[78%] max-w-[280px] animate-slide-in-left flex-col border-r border-gray-200 bg-paper px-3 [--pb:1.25rem] [--pt:1.25rem] shadow-modal">
             <div className="mb-4 flex items-center justify-between px-3">
-              <div className="text-[15px] font-semibold tracking-tight">Finances</div>
+              <div className="flex items-center gap-2">
+                <Banknote size={18} strokeWidth={1.75} className="shrink-0 text-accent" />
+                <span className="text-[15px] font-semibold tracking-tight">Finance Bro</span>
+              </div>
               <button
                 onClick={onCloseMobile}
                 aria-label="Close menu"

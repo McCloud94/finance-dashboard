@@ -8,7 +8,12 @@ Personal-OS dashboard server. Python stdlib only (http.server + sqlite3).
   PATCH /api/transaction/{id}   → edit one transaction (category/account/name/…),
                                   or flip `planned` (manual entries only)
   POST  /api/account           → add account
-  PATCH /api/debt/{id}          → update statement figures (due_amount, due_date)
+  DELETE /api/account/{id}      → delete an account (refused while anything references it)
+  POST  /api/debt              → add a debt (loan / owed-to-me / credit card)
+  PATCH /api/debt/{id}          → update a debt (statement figures, name, balance, …)
+  DELETE /api/debt/{id}         → delete a debt
+  POST  /api/category          → add a category (a budget item)
+  DELETE /api/category/{id}     → delete a category (refused while transactions use it)
   PATCH /api/budget/{category}  → set monthly_limit (null clears the budget)
   DELETE /api/transaction/{id}  → delete a transaction (tombstoned if imported)
   POST  /api/project           → add project
@@ -53,9 +58,16 @@ EDITABLE_TX_FIELDS = {"category", "account", "name", "note", "direction", "trans
 # field written straight to the row instead of into tx_overrides. See
 # Store.set_planned for why an override would break the date sweep.
 VALID_FLOWS = {"in", "out"}
-# A credit card's outstanding balance is derived from its account's transactions,
-# so it is deliberately not editable here — only the statement figures are.
-EDITABLE_DEBT_FIELDS = {"due_amount", "due_date"}
+# What the dashboard may write on a debt. `balance` is here so a loan can be
+# paid down from the UI — but it is REFUSED on a credit card, whose outstanding
+# is derived from the card account's transactions and would only go stale if it
+# were also typed in. See update_debt.
+EDITABLE_DEBT_FIELDS = {"due_amount", "due_date", "name", "counterparty",
+                        "credit_limit", "balance", "note"}
+DEBT_NUMERIC_FIELDS = {"due_amount", "credit_limit", "balance"}
+VALID_DEBT_KINDS = {"credit_card", "loan", "owed_to_me"}
+VALID_ACCOUNT_TYPES = {"bank", "prop_firm", "crypto", "broker", "cash", "credit"}
+VALID_CATEGORY_TYPES = {"income", "expense"}
 MIME = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -342,14 +354,102 @@ class Store:
             )
             return dict(c.execute("SELECT * FROM accounts WHERE id=?", (acc["id"],)).fetchone())
 
-    def update_debt(self, debt_id, fields):
-        """Update the statement figures on a debt (due_amount / due_date).
+    def delete_account(self, acc_id):
+        """Remove an account — but only once nothing points at it any more.
 
-        These are the only debt fields the dashboard writes. A credit card's
-        outstanding balance is NOT among them — that is derived from the card
-        account's transactions. The statement due is not derivable: the bank's
-        posting dates differ from transaction dates, and a wrong number here has
-        a late fee attached, so it is read off the statement and typed in.
+        Deleting an account that still has transactions would leave rows whose
+        balance belongs to nobody: they'd vanish from every account total while
+        still counting as income or spend. Same for a debt mapped to the account
+        (a credit card without its account has no derivable outstanding). So the
+        refusal names what is in the way and the caller clears that first.
+        """
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM accounts WHERE id=?", (acc_id,)).fetchone() is None:
+                return None
+            txs = c.execute(
+                "SELECT COUNT(*) FROM transactions WHERE account=? OR transfer_to=?",
+                (acc_id, acc_id)).fetchone()[0]
+            debts = [r["name"] for r in c.execute(
+                "SELECT name FROM debts WHERE account=?", (acc_id,))]
+            if txs or debts:
+                return {"blocked": True, "transactions": txs, "debts": debts}
+            c.execute("DELETE FROM accounts WHERE id=?", (acc_id,))
+            return {"blocked": False, "id": acc_id}
+
+    def debts(self):
+        with self._conn() as c:
+            return self._rows(c.execute("SELECT * FROM debts"))
+
+    def add_debt(self, d):
+        with self._conn() as c:
+            c.execute(
+                """INSERT OR REPLACE INTO debts
+                   (id,name,kind,counterparty,account,credit_limit,balance,
+                    due_amount,due_date,note,updated_at)
+                   VALUES (:id,:name,:kind,:counterparty,:account,:credit_limit,:balance,
+                           :due_amount,:due_date,:note,datetime('now'))""",
+                d,
+            )
+            return dict(c.execute("SELECT * FROM debts WHERE id=?", (d["id"],)).fetchone())
+
+    def delete_debt(self, debt_id):
+        """Delete a debt. The linked account (if any) is left alone — a card's
+        transactions are real money that moved and must not disappear with the
+        row that summarised them."""
+        with self._conn() as c:
+            cur = c.execute("DELETE FROM debts WHERE id=?", (debt_id,))
+            return {"id": debt_id} if cur.rowcount else None
+
+    def debt_kind(self, debt_id):
+        with self._conn() as c:
+            row = c.execute("SELECT kind FROM debts WHERE id=?", (debt_id,)).fetchone()
+            return row["kind"] if row else None
+
+    def add_category(self, cat):
+        with self._conn() as c:
+            c.execute(
+                "INSERT OR REPLACE INTO categories (id,name,color,type) VALUES (:id,:name,:color,:type)",
+                cat,
+            )
+            return dict(c.execute("SELECT * FROM categories WHERE id=?", (cat["id"],)).fetchone())
+
+    def delete_category(self, cat_id):
+        """Delete a category and any budget row on it.
+
+        Refused while transactions still use it: SQLite would either orphan the
+        reference or (with foreign_keys ON) fail mid-way, and either way the
+        spend those rows represent would stop showing up anywhere. The count is
+        returned so the caller can say what is in the way, and the transactions
+        can be recategorized first.
+
+        An override that moved a row INTO this category counts too — it is the
+        row's effective category, which is the one the dashboard shows.
+        """
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM categories WHERE id=?", (cat_id,)).fetchone() is None:
+                return None
+            used = c.execute(
+                "SELECT COUNT(*) FROM transactions WHERE category=?", (cat_id,)).fetchone()[0]
+            used += sum(1 for r in c.execute("SELECT fields FROM tx_overrides")
+                        if json.loads(r["fields"]).get("category") == cat_id)
+            if used:
+                return {"blocked": True, "transactions": used}
+            c.execute("DELETE FROM budget_limits WHERE category=?", (cat_id,))
+            c.execute("DELETE FROM categories WHERE id=?", (cat_id,))
+            return {"blocked": False, "id": cat_id}
+
+    def update_debt(self, debt_id, fields):
+        """Update a debt from the dashboard.
+
+        The statement figures (due_amount / due_date) are not derivable: the
+        bank's posting dates differ from transaction dates, and a wrong number
+        here has a late fee attached, so they are read off the statement and
+        typed in. Name, counterparty, limit, note and — for loans — `balance`
+        are plain config the user owns.
+
+        `balance` on a credit card is rejected by the caller, not here: a card's
+        outstanding is derived from its account's transactions, so a typed-in
+        number would be a second, staler answer to the same question.
         """
         fields = {k: v for k, v in fields.items() if k in EDITABLE_DEBT_FIELDS}
         if not fields:
@@ -493,6 +593,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._add_transaction(body)
         if path == "/api/account":
             return self._add_account(body)
+        if path == "/api/debt":
+            return self._add_debt(body)
+        if path == "/api/category":
+            return self._add_category(body)
         if path == "/api/project":
             return self._add_project(body)
         m = re.match(r"^/api/streak/([^/]+)/ping$", path)
@@ -508,6 +612,42 @@ class Handler(BaseHTTPRequestHandler):
             res = STORE.delete_transaction(unquote(m.group(1)))
             return self._send_json({"ok": True, **res}) if res \
                 else self._send_json({"error": "transaction not found"}, 404)
+
+        m = re.match(r"^/api/account/([^/]+)$", path)
+        if m:
+            res = STORE.delete_account(unquote(m.group(1)))
+            if res is None:
+                return self._send_json({"error": "account not found"}, 404)
+            if res["blocked"]:
+                # 409, not 400: the request is well-formed, the state is what
+                # refuses it — and the message says exactly what to clear.
+                bits = []
+                if res["transactions"]:
+                    bits.append(f"{res['transactions']} transaction(s) use it")
+                if res["debts"]:
+                    bits.append("linked to debt: " + ", ".join(res["debts"]))
+                return self._send_json(
+                    {"error": "cannot delete this account — " + "; ".join(bits)}, 409)
+            return self._send_json({"ok": True, "id": res["id"]})
+
+        m = re.match(r"^/api/debt/([^/]+)$", path)
+        if m:
+            res = STORE.delete_debt(unquote(m.group(1)))
+            return self._send_json({"ok": True, **res}) if res \
+                else self._send_json({"error": "debt not found"}, 404)
+
+        m = re.match(r"^/api/category/([^/]+)$", path)
+        if m:
+            res = STORE.delete_category(unquote(m.group(1)))
+            if res is None:
+                return self._send_json({"error": "category not found"}, 404)
+            if res["blocked"]:
+                return self._send_json(
+                    {"error": f"cannot delete this category — {res['transactions']} "
+                              f"transaction(s) use it. Recategorize them first, or clear "
+                              f"the budget instead of deleting."}, 409)
+            return self._send_json({"ok": True, "id": res["id"]})
+
         return self._send_json({"error": "not found"}, 404)
 
     # ── PATCH ────────────────────────────────────────────────────────────────
@@ -529,20 +669,21 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.match(r"^/api/debt/([^/]+)$", path)
         if m:
+            debt_id = unquote(m.group(1))
             fields = {k: v for k, v in body.items() if k in EDITABLE_DEBT_FIELDS}
             if not fields:
                 return self._send_json(
                     {"error": f"no editable fields; allowed: {sorted(EDITABLE_DEBT_FIELDS)}"}, 400)
-            if "due_amount" in fields and fields["due_amount"] is not None:
-                try:
-                    fields["due_amount"] = round(float(fields["due_amount"]), 2)
-                except (TypeError, ValueError):
-                    return self._send_json({"error": "due_amount must be a number"}, 400)
-                if fields["due_amount"] < 0:
-                    return self._send_json({"error": "due_amount cannot be negative"}, 400)
-            if fields.get("due_date") and not re.match(r"^\d{4}-\d{2}-\d{2}$", str(fields["due_date"])):
-                return self._send_json({"error": "due_date must be YYYY-MM-DD"}, 400)
-            debt = STORE.update_debt(m.group(1), fields)
+            err = self._clean_debt_fields(fields)
+            if err:
+                return self._send_json({"error": err}, 400)
+            if "balance" in fields and STORE.debt_kind(debt_id) == "credit_card":
+                return self._send_json(
+                    {"error": "a credit card's balance is derived from its account's "
+                              "transactions and cannot be set here"}, 400)
+            if "name" in fields and not str(fields["name"]).strip():
+                return self._send_json({"error": "name cannot be empty"}, 400)
+            debt = STORE.update_debt(debt_id, fields)
             return self._send_json({"ok": True, "debt": debt}) if debt \
                 else self._send_json({"error": "debt not found"}, 404)
 
@@ -726,17 +867,130 @@ class Handler(BaseHTTPRequestHandler):
         name = str(body.get("name", "")).strip()
         if not name:
             return self._send_json({"error": "name required"}, 400)
+        acc_type = str(body.get("type") or "bank")
+        if acc_type not in VALID_ACCOUNT_TYPES:
+            return self._send_json(
+                {"error": f"type must be one of {sorted(VALID_ACCOUNT_TYPES)}"}, 400)
         try:
             balance = round(float(body.get("balance", 0)), 2)
         except (TypeError, ValueError):
             return self._send_json({"error": "balance must be a number"}, 400)
+        # The id is derived from the name, so two accounts called the same thing
+        # collide. INSERT OR REPLACE would silently overwrite the first one and
+        # take its transactions with it, so a taken id is an error, not a merge.
+        _, existing = STORE.reference()
+        if acc_id in existing:
+            return self._send_json(
+                {"error": f"an account with id '{acc_id}' already exists — pick another name"}, 409)
         meta = body.get("meta", {})
         acc = {
-            "id": acc_id, "name": name, "type": body.get("type", "bank"),
-            "balance": balance, "currency": body.get("currency", "EUR"),
+            "id": acc_id, "name": name, "type": acc_type,
+            "balance": balance, "currency": body.get("currency") or "EUR",
             "meta": json.dumps(meta) if isinstance(meta, (dict, list)) else str(meta),
         }
         return self._send_json({"ok": True, "account": STORE.add_account(acc)})
+
+    @staticmethod
+    def _clean_debt_fields(fields):
+        """Coerce and range-check a debt's numeric/date fields in place.
+
+        Returns an error string, or None when the fields are good. Shared by the
+        create and update paths so a debt cannot be born in a shape the update
+        path would reject.
+        """
+        for key in DEBT_NUMERIC_FIELDS & set(fields):
+            if fields[key] is None or fields[key] == "":
+                fields[key] = None
+                continue
+            try:
+                fields[key] = round(float(fields[key]), 2)
+            except (TypeError, ValueError):
+                return f"{key} must be a number"
+            if fields[key] < 0:
+                return f"{key} cannot be negative"
+        if fields.get("due_date") and not re.match(r"^\d{4}-\d{2}-\d{2}$", str(fields["due_date"])):
+            return "due_date must be YYYY-MM-DD"
+        return None
+
+    def _add_debt(self, body):
+        name = str(body.get("name", "")).strip()
+        kind = str(body.get("kind", "")).strip()
+        if not name:
+            return self._send_json({"error": "name required"}, 400)
+        if kind not in VALID_DEBT_KINDS:
+            return self._send_json(
+                {"error": f"kind must be one of {sorted(VALID_DEBT_KINDS)}"}, 400)
+
+        account = str(body.get("account") or "").strip()
+        _, accounts = STORE.reference()
+        if account and account not in accounts:
+            return self._send_json({"error": f"unknown account '{account}'"}, 400)
+        # A credit card's outstanding is the negative of its account balance, so
+        # a card with no account has nothing to derive from and would sit at a
+        # frozen, hand-typed number forever.
+        if kind == "credit_card" and not account:
+            return self._send_json(
+                {"error": "a credit card must be linked to an account of type 'credit'"}, 400)
+
+        fields = {k: body.get(k) for k in ("credit_limit", "balance", "due_amount", "due_date")}
+        err = self._clean_debt_fields(fields)
+        if err:
+            return self._send_json({"error": err}, 400)
+
+        base = slugify(body.get("id") or name)
+        existing = {d["id"] for d in STORE.debts()}
+        debt_id, n = base, 2
+        while debt_id in existing:      # two "Mum" loans are a normal thing to have
+            debt_id, n = f"{base}-{n}", n + 1
+
+        rec = {
+            "id": debt_id, "name": name, "kind": kind,
+            "counterparty": str(body.get("counterparty") or "").strip() or None,
+            "account": account or None,
+            "credit_limit": fields["credit_limit"],
+            # a card's stored balance is never read (cardOutstanding derives it),
+            # so it is pinned at 0 rather than left to look authoritative
+            "balance": 0 if kind == "credit_card" else (fields["balance"] or 0),
+            "due_amount": fields["due_amount"], "due_date": fields["due_date"] or None,
+            "note": str(body.get("note") or "").strip() or None,
+        }
+        return self._send_json({"ok": True, "debt": STORE.add_debt(rec)})
+
+    def _add_category(self, body):
+        """Add a category — which is what a 'budget item' is.
+
+        A budget row is a limit ON a category, so there is nothing to budget
+        until the category exists. `monthly_limit` is optional and applied after
+        the insert, which is why the response carries both.
+        """
+        name = str(body.get("name", "")).strip()
+        if not name:
+            return self._send_json({"error": "name required"}, 400)
+        cat_type = str(body.get("type") or "expense")
+        if cat_type not in VALID_CATEGORY_TYPES:
+            return self._send_json({"error": "type must be income or expense"}, 400)
+        cat_id = slugify(body.get("id") or name)
+        cat_types, _ = STORE.reference()
+        if cat_id in cat_types:
+            return self._send_json(
+                {"error": f"a category with id '{cat_id}' already exists"}, 409)
+        color = str(body.get("color") or "").strip()
+        if not re.match(r"^#[0-9a-fA-F]{6}$", color):
+            color = "#8a7f70"           # neutral; the user can recolor in the JSON seed
+        cat = {"id": cat_id, "name": name, "color": color, "type": cat_type}
+        created = STORE.add_category(cat)
+
+        monthly = None
+        raw = body.get("monthly_limit")
+        if raw not in (None, ""):
+            try:
+                limit = round(float(raw), 2)
+            except (TypeError, ValueError):
+                return self._send_json({"error": "monthly_limit must be a number"}, 400)
+            if limit < 0:
+                return self._send_json({"error": "monthly_limit cannot be negative"}, 400)
+            monthly = STORE.set_budget(cat_id, limit)
+        return self._send_json({"ok": True, "category": created, "monthly": monthly})
 
     def _add_project(self, body):
         name = str(body.get("name", "")).strip()

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ApiData, Direction, Flow, Transaction } from "@/types";
+import type {
+  AccountType, ApiData, CategoryType, DebtKind, Direction, Flow, Transaction,
+} from "@/types";
 
 interface UseData {
   data: ApiData | null;
@@ -10,14 +12,62 @@ interface UseData {
   updateTransaction: (id: string, fields: TxEdit) => Promise<Transaction>;
   deleteTransaction: (id: string) => Promise<void>;
   updateDebt: (id: string, fields: DebtEdit) => Promise<void>;
+  addDebt: (debt: NewDebt) => Promise<void>;
+  deleteDebt: (id: string) => Promise<void>;
   /** set a category's monthly budget; null clears it */
   updateBudget: (category: string, monthlyLimit: number | null) => Promise<void>;
+  /** add an account, optionally with an opening balance */
+  addAccount: (account: NewAccount) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
+  /** add a budget item = a category, optionally with a monthly limit */
+  addCategory: (category: NewCategory) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
 }
 
-/** The only debt fields the dashboard writes — mirrors EDITABLE_DEBT_FIELDS. */
+/** The debt fields the dashboard writes — mirrors EDITABLE_DEBT_FIELDS. */
 export interface DebtEdit {
   due_amount?: number | null;
   due_date?: string | null;
+  name?: string;
+  counterparty?: string | null;
+  credit_limit?: number | null;
+  /** loans and owed-to-me only — the server rejects it on a credit card, whose
+   *  outstanding is derived from its account's transactions */
+  balance?: number;
+  note?: string | null;
+}
+
+export interface NewDebt {
+  name: string;
+  kind: DebtKind;
+  counterparty?: string;
+  /** required for credit_card: the account its outstanding is derived from */
+  account?: string;
+  credit_limit?: number | null;
+  balance?: number;
+  due_amount?: number | null;
+  due_date?: string | null;
+  note?: string;
+}
+
+export interface NewAccount {
+  name: string;
+  type: AccountType;
+  currency?: string;
+  /**
+   * What is in the account today. Balances are DERIVED from transactions, so
+   * this is not stored as a number to trust — it is booked as one opening
+   * `internal` row (see addAccount). Without it a brand-new account starts at
+   * zero and every total is wrong until the whole history is imported.
+   */
+  opening_balance?: number;
+}
+
+export interface NewCategory {
+  name: string;
+  type: CategoryType;
+  monthly_limit?: number | null;
+  color?: string;
 }
 
 export interface NewEntry {
@@ -52,6 +102,13 @@ export interface TxEdit {
   planned?: boolean;
 }
 
+/** Local calendar day as YYYY-MM-DD (not toISOString, which is UTC and can
+ *  land the row on yesterday for anyone west of Greenwich). */
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 async function readError(res: Response): Promise<string> {
   try {
     const body = await res.json();
@@ -74,7 +131,7 @@ export function useData(): UseData {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
     } catch {
-      setError("Could not reach the data server. Start it with: python3 serve.py");
+      setError("Could not reach the data server. Start it with: ./start.sh");
     } finally {
       setLoading(false);
     }
@@ -157,8 +214,111 @@ export function useData(): UseData {
     setData((d) => (d ? { ...d, budget: { ...d.budget, monthly: body.monthly } } : d));
   }, []);
 
+  const addDebt = useCallback(async (debt: NewDebt) => {
+    const res = await fetch("/api/debt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(debt),
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const body = await res.json();
+    setData((d) => (d ? { ...d, debts: [...d.debts, body.debt] } : d));
+  }, []);
+
+  const deleteDebt = useCallback(async (id: string) => {
+    const res = await fetch(`/api/debt/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await readError(res));
+    setData((d) => (d ? { ...d, debts: d.debts.filter((x) => x.id !== id) } : d));
+  }, []);
+
+  /**
+   * Add an account, and book its opening balance as a transaction rather than
+   * storing it on the account.
+   *
+   * The opening row is an `internal` movement with no `transfer_to`: money that
+   * was already there, arriving from outside the ledger. It has to be internal
+   * — booking it as income would put the user's existing savings into this
+   * month's earnings and wreck every income figure and savings rate.
+   */
+  const addAccount = useCallback(async (account: NewAccount) => {
+    const res = await fetch("/api/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: account.name,
+        type: account.type,
+        currency: account.currency ?? "EUR",
+      }),
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const created = (await res.json()).account as { id: string };
+
+    const opening = account.opening_balance ?? 0;
+    if (opening !== 0) {
+      await fetch("/api/transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: todayISO(),
+          name: "Opening balance",
+          amount: Math.abs(opening),
+          direction: "internal",
+          flow: opening > 0 ? "in" : "out",
+          account: created.id,
+          note: "Starting balance when the account was added",
+        }),
+      });
+    }
+    // Refetch rather than splice: the opening row changes balances that several
+    // views derive, and a partial local update is how those drift apart.
+    await load();
+  }, [load]);
+
+  const deleteAccount = useCallback(async (id: string) => {
+    const res = await fetch(`/api/account/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await readError(res));
+    setData((d) => (d ? { ...d, accounts: d.accounts.filter((a) => a.id !== id) } : d));
+  }, []);
+
+  const addCategory = useCallback(async (category: NewCategory) => {
+    const res = await fetch("/api/category", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(category),
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const body = await res.json();
+    setData((d) =>
+      d
+        ? {
+            ...d,
+            categories: [...d.categories, body.category],
+            budget: body.monthly ? { ...d.budget, monthly: body.monthly } : d.budget,
+          }
+        : d,
+    );
+  }, []);
+
+  /** Deleting a category takes its budget row with it — the server refuses
+   *  while any transaction still uses it, and says how many. */
+  const deleteCategory = useCallback(async (id: string) => {
+    const res = await fetch(`/api/category/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await readError(res));
+    setData((d) => {
+      if (!d) return d;
+      const monthly = { ...d.budget.monthly };
+      delete monthly[id];
+      return {
+        ...d,
+        categories: d.categories.filter((c) => c.id !== id),
+        budget: { ...d.budget, monthly },
+      };
+    });
+  }, []);
+
   return {
     data, loading, error, reload: load, addEntry, updateTransaction,
-    deleteTransaction, updateDebt, updateBudget,
+    deleteTransaction, updateDebt, addDebt, deleteDebt, updateBudget,
+    addAccount, deleteAccount, addCategory, deleteCategory,
   };
 }

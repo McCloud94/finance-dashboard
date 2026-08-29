@@ -113,11 +113,14 @@ class ImportSafetyTests(unittest.TestCase):
             self.assertEqual(con.execute("SELECT source_file FROM transactions").fetchone()[0], "Revolut.csv")
 
     def test_normalize_accepts_single_file(self):
+        # Uses the shipped Wise profile: the point is that one file in gets one
+        # normalized row out, tagged with the file it came from.
         with tempfile.TemporaryDirectory() as d:
-            source, output = Path(d) / "Bybit.csv", Path(d) / "normalized.csv"
+            source, output = Path(d) / "Wise.csv", Path(d) / "normalized.csv"
             source.write_text(
-                "Merchant Name,Transaction Date & Time,Total Transaction Amount,Category\n"
-                "Shop,2026-08-01 10:00:00,-5.00 EUR,groceries\n", encoding="utf-8")
+                "Description,Date,Amount\n"
+                "Card transaction of 5.00 EUR issued by Shop,01-08-2026,-5.00\n",
+                encoding="utf-8")
             result = subprocess.run(
                 [sys.executable, "normalize.py", "--in", str(source), "--out", str(output)],
                 cwd=ROOT, text=True, capture_output=True)
@@ -125,8 +128,8 @@ class ImportSafetyTests(unittest.TestCase):
             with output.open(encoding="utf-8") as f:
                 rows = list(csv.DictReader(f))
             self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["source_file"], "Bybit.csv")
-            self.assertEqual(rows[0]["category"], "groceries")
+            self.assertEqual(rows[0]["source_file"], "Wise.csv")
+            self.assertEqual(rows[0]["account"], "wise")
 
 
 if __name__ == "__main__":

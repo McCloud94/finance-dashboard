@@ -186,7 +186,15 @@ export function budgetVsActual(
     avgTotals.set(catKey(t), (avgTotals.get(catKey(t)) ?? 0) + signedExpense(t));
   }
 
-  const ids = new Set<string>([...Object.keys(budget.monthly), ...actualMonth.keys()]);
+  // Every expense category is a row, not only the ones with a limit or with
+  // spend this month. A category added from the dashboard has neither yet, and
+  // leaving it out meant it disappeared the moment it was created — with no way
+  // to give it a limit, which is the whole point of adding it.
+  const ids = new Set<string>([
+    ...categories.filter((c) => c.type === "expense").map((c) => c.id),
+    ...Object.keys(budget.monthly),
+    ...actualMonth.keys(),
+  ]);
   const rows: BudgetRow[] = [];
   for (const id of ids) {
     const b = budget.monthly[id] ?? 0;

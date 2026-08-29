@@ -184,7 +184,8 @@ if [ "$MODE" = "1" ]; then
     note "  To import your first month, export a CSV from your bank and send it to"
     note "  the assistant in the chat — attaching the file is enough."
   else
-    echo "  Start the dashboard:  ${B}cd \"$DIR\" && python3 serve.py${R}   → http://127.0.0.1:8787"
+    echo "  Start the dashboard:  ${B}cd \"$DIR\" && ./start.sh${R}   → http://127.0.0.1:8787"
+    note "  It keeps running after you close the terminal. Stop it with ./stop.sh."
     echo "  Then point any AI agent at this folder to manage it in plain language."
   fi
   note "  Want it always-on and reachable from your phone instead? SETUP.md → Online."

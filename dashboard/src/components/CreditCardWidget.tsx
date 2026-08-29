@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, CreditCard, Pencil, RefreshCw, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/field";
+import { DeleteButton } from "@/components/DeleteButton";
 import { useApp } from "@/app-context";
 import { creditCards } from "@/lib/aggregate";
 import { fmtEUR0, todayDate } from "@/lib/format";
@@ -98,7 +99,7 @@ function StatementEditor({
  * (Debt view) the widget still lays itself out.
  */
 export function CreditCardWidget({ className }: { className?: string } = {}) {
-  const { data } = useApp();
+  const { data, deleteDebt } = useApp();
   const cards = useMemo(
     () => creditCards(data.debts ?? [], todayDate(), data.accounts, data.transactions),
     [data.debts, data.accounts, data.transactions],
@@ -124,16 +125,31 @@ export function CreditCardWidget({ className }: { className?: string } = {}) {
                   <CreditCard size={15} strokeWidth={1.5} className="text-gray-400" />
                   {debt.name}
                 </span>
-                {due != null && (
-                  <span
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-xs font-medium",
-                      label.urgent ? "bg-expense/10 text-expense" : "bg-gray-100 text-gray-600",
-                    )}
-                  >
-                    {label.text}
-                  </span>
-                )}
+                <span className="flex shrink-0 items-center gap-1">
+                  {due != null && (
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-medium",
+                        label.urgent ? "bg-expense/10 text-expense" : "bg-gray-100 text-gray-600",
+                      )}
+                    >
+                      {label.text}
+                    </span>
+                  )}
+                  {/* Removes the card from your debts. Its account and every
+                      transaction on it stay — that money really moved. */}
+                  <DeleteButton
+                    label={debt.name}
+                    description={
+                      <>
+                        This removes {debt.name} from your debts. The card's account and its
+                        transactions are kept, so nothing you spent disappears.
+                      </>
+                    }
+                    onDelete={() => deleteDebt(debt.id)}
+                    className="-mr-1"
+                  />
+                </span>
               </div>
 
               {/* Two different numbers, deliberately shown together.

@@ -25,9 +25,10 @@ Private, no login, nothing exposed to the internet. Needs `python3` (preinstalle
 ```bash
 git clone https://github.com/McCloud94/finance-dashboard.git
 cd finance-dashboard
-python3 init_db.py      # first time only
-python3 serve.py        # open http://127.0.0.1:8787
+./start.sh              # open http://127.0.0.1:8787
 ```
+
+`./start.sh` sets up the database on first run and leaves the server running in the background — you can close the terminal. `./stop.sh` stops it, `./start.sh --status` tells you whether it is up.
 
 The **selling point is the agent**: after a dinner or a grocery run, you say what you spent and it files it — no clicking through forms. Pick your path:
 

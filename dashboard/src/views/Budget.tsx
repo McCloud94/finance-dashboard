@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, Plus, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { AddBudgetItemDialog } from "@/components/AddBudgetItemDialog";
+import { DeleteButton } from "@/components/DeleteButton";
 import { useApp } from "@/app-context";
 import { budgetVsActual, type BudgetStatus } from "@/lib/aggregate";
 import { fmtEUR0, fmtMonthLabel } from "@/lib/format";
@@ -95,9 +97,10 @@ function LimitEditor({
 }
 
 export function BudgetView() {
-  const { data, monthKey } = useApp();
+  const { data, monthKey, deleteCategory } = useApp();
   const [editing, setEditing] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const all = useMemo(
     () => budgetVsActual(data.transactions, data.categories, data.budget, monthKey),
@@ -120,6 +123,10 @@ export function BudgetView() {
           <span className="text-[13px] text-gray-400">{fmtMonthLabel(monthKey)}</span>
           <Button variant="secondary" size="sm" onClick={() => setShowAll((v) => !v)}>
             {showAll ? "Budgeted only" : `Show all (${all.length - budgetedCount} more)`}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+            <Plus size={14} strokeWidth={2} />
+            Add item
           </Button>
         </div>
       </div>
@@ -144,11 +151,29 @@ export function BudgetView() {
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: r.color }} />
                     <span className="truncate">{r.name}</span>
                   </span>
-                  {unbudgeted ? (
-                    <Badge className="text-gray-400">No budget</Badge>
-                  ) : (
-                    <Badge className={STATUS_CLS[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-                  )}
+                  <span className="flex shrink-0 items-center gap-1">
+                    {unbudgeted ? (
+                      <Badge className="text-gray-400">No budget</Badge>
+                    ) : (
+                      <Badge className={STATUS_CLS[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                    )}
+                    {/* Deletes the category itself, budget and all. The server
+                        refuses while transactions still use it and says how
+                        many — clearing the limit (edit → empty) is the milder
+                        option it points at. */}
+                    <DeleteButton
+                      label={r.name}
+                      description={
+                        <>
+                          This removes the <strong>{r.name}</strong> category and its budget. It
+                          can only be deleted while no transactions use it — to keep the category
+                          but stop budgeting it, edit the amount and leave it empty instead.
+                        </>
+                      }
+                      onDelete={() => deleteCategory(r.id)}
+                      className="-mr-1"
+                    />
+                  </span>
                 </div>
 
                 {editing === r.id ? (
@@ -191,6 +216,8 @@ export function BudgetView() {
           );
         })}
       </div>
+
+      <AddBudgetItemDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
   );
 }

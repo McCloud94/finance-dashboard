@@ -18,3 +18,7 @@ Statements/
 
 # OS
 .DS_Store
+
+# Runtime state written by start.sh
+data/server.pid
+data/server.log

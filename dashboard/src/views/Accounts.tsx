@@ -1,6 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { CreditCardWidget } from "@/components/CreditCardWidget";
+import { AddAccountDialog } from "@/components/AddAccountDialog";
+import { DeleteButton } from "@/components/DeleteButton";
 import { useApp } from "@/app-context";
 import {
   accountBalances,
@@ -14,7 +18,8 @@ import { fmtEUR0, fmtMonthLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export function AccountsView() {
-  const { data, monthKey } = useApp();
+  const { data, monthKey, deleteAccount } = useApp();
+  const [addOpen, setAddOpen] = useState(false);
   const { transactions, accounts, categories, debts } = data;
   const year = monthKey.slice(0, 4);
 
@@ -74,15 +79,35 @@ export function AccountsView() {
       </div>
 
       <div>
-        <div className="mb-3 flex items-baseline justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-[15px] font-semibold">Accounts</h3>
-          <span className="text-xs text-gray-400">Summed from transactions</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">Summed from transactions</span>
+            <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+              <Plus size={14} strokeWidth={2} />
+              Add account
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {balances.map((a) => (
             <Card key={a.id}>
               <CardContent className="p-5">
-                <span className="text-sm font-medium">{a.name}</span>
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium">{a.name}</span>
+                  <DeleteButton
+                    label={a.name}
+                    description={
+                      <>
+                        This removes the account from the dashboard. It can only be deleted
+                        while nothing points at it — if it still has transactions, or a credit
+                        card is linked to it, you'll be told what to clear first.
+                      </>
+                    }
+                    onDelete={() => deleteAccount(a.id)}
+                    className="-mr-1 -mt-1"
+                  />
+                </div>
                 {/* Derived, not editable. To change a balance, add the missing
                     transaction — the number here is only ever a sum of rows. */}
                 <div className="mt-1">
@@ -167,6 +192,8 @@ export function AccountsView() {
           )}
         </CardContent>
       </Card>
+
+      <AddAccountDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
   );
 }

@@ -8,7 +8,7 @@ No spreadsheets or apps, no logins.
 
 - **Your data stays yours.** One SQLite file on your machine. No cloud account, no signup, no API keys.
 - **Zero backend dependencies.** The server is Python standard library only.
-- **Bank-agnostic import.** Adding support for a new bank = writing one small JSON profile, never touching code. Ships with profiles for Revolut, Wise, and Bybit.
+- **Bank-agnostic import.** Adding support for a new bank = writing one small JSON profile, never touching code. Ships with profiles for Revolut and Wise.
 - **Runs offline.** Everything is on `localhost`.
 - **Plan ahead.** Mark a payment you know is coming as planned; it stays out of your totals until its date arrives, then counts itself — and steps aside when the bank's own row for it turns up.
 
@@ -31,14 +31,21 @@ The dashboard is a **view**. The AI agent is the **controller** — it runs the 
 Requirements: Python 3.9+, and (optionally) Node 18+ if you want to rebuild the frontend. A pre-built frontend ships in `dist/`, so Node is **not** required to run it.
 
 ```bash
-# 1. Create the database (schema + demo seed data)
-python3 init_db.py
-
-# 2. Start the server
-python3 serve.py            # → http://127.0.0.1:8787
+./start.sh                  # → http://127.0.0.1:8787
 ```
 
-Open `http://127.0.0.1:8787` in your browser. You'll see the dashboard populated with a few demo accounts. Delete them in the UI and add your own.
+That is the whole thing: it creates the database on first run, starts the server **detached** so it survives the terminal closing, and waits until the API actually answers before saying it is up.
+
+```bash
+./start.sh --status         # is it running?
+./stop.sh                   # stop it
+```
+
+Logs go to `data/server.log`, the process id to `data/server.pid`.
+
+> If you (or an AI agent setting this up for you) run `python3 serve.py &` instead, the server dies with the shell that started it — it looks like it worked, then the page stops loading. Use `./start.sh`.
+
+Open `http://127.0.0.1:8787` in your browser. You'll see a few demo accounts, a demo credit card and a starter set of budget categories. Delete them in the UI — Accounts, Debt and Budget each have an **Add** button and a trash icon on every card — and put your own in.
 
 ### Rebuilding the frontend (optional)
 
@@ -92,12 +99,13 @@ Write `profiles/<yourbank>.json` describing the CSV's columns, date format, and 
 | Path | Role |
 |---|---|
 | `serve.py` | HTTP API (`/api/*`) + static file serving. `Store` class = all DB access. |
+| `start.sh` / `stop.sh` | Start the server detached (survives the shell) / stop it. |
 | `init_db.py` | Creates schema, seeds reference data from `data/*.json`. `--reset` drops everything. |
 | `normalize.py` | Profile-driven CSV → unified `normalized.csv`. |
 | `import_csv.py` | `normalized.csv` → SQLite. Additive + deduplicating; `--dry-run`, scoped `--replace-source-file`. |
 | `reconcile_balances.py` | Reconcile derived balances against an as-of statement figure. |
 | `ledger.py` | The one definition of how a transaction moves money (transfer pairing, balances). |
-| `profiles/*.json` | Per-bank CSV format definitions (Revolut, Wise, Bybit). |
+| `profiles/*.json` | Per-bank CSV format definitions (Revolut, Wise). |
 | `rules/categorize.json` | Merchant canonicalization + category mapping (starter set — edit freely). |
 | `data/*.json` | Reference seed data (accounts, categories, budget, debts). |
 | `dashboard/` | React + Vite + Tailwind frontend source. |
