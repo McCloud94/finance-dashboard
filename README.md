@@ -79,12 +79,19 @@ By hand:
 # a single file, from anywhere — no folder needed
 python3 normalize.py --in ~/Downloads/statement.csv --out data/normalized.csv
 
-# or drop exports into Statements/ and let it pick them all up
+# or drop one export into Statements/ and let it find it
 python3 normalize.py                 # Statements/*.csv → data/normalized.csv
 
 python3 import_csv.py --dry-run      # preview
 python3 import_csv.py                # write to the DB
 ```
+
+**Import one statement at a time.** Normalizing several CSVs in one run is refused
+on purpose: each bank needs its own pass over the categorization rules, and a
+batch import lands everything uncategorized while still looking like it worked.
+`normalize.py` prints the payees that matched no rule — add them to
+`rules/categorize.json`, re-run, and only then import. `import_csv.py` refuses to
+commit when 30% or more of the incoming rows have no category.
 
 Re-imports are idempotent (dedup by row id) and additive, so overlapping statements are safe. Your manual edits live in a separate `tx_overrides` table and **survive re-imports**. Clearing and re-importing one statement is scoped to that file: `python3 import_csv.py --replace --replace-source-file Revolut.csv`.
 

@@ -258,6 +258,11 @@ def main():
                     help="CSV file or directory containing CSV exports")
     ap.add_argument("--out", dest="outfile", default=DEFAULT_OUT)
     ap.add_argument("--report", action="store_true")
+    ap.add_argument(
+        "--allow-multi", action="store_true",
+        help="normalize more than one CSV in a single run (off by default: "
+             "importing several statements at once hides categorization gaps)",
+    )
     args = ap.parse_args()
 
     profiles = load_profiles()
@@ -270,6 +275,19 @@ def main():
         files = [args.indir]
     else:
         files = sorted(glob.glob(os.path.join(args.indir, "*.csv")))
+    if len(files) > 1 and not args.allow_multi:
+        listing = "\n".join(f"    {os.path.basename(f)}" for f in files)
+        sys.exit(
+            f"\n  Refusing to normalize {len(files)} files in one run:\n{listing}\n\n"
+            "  Import ONE statement at a time. Each bank needs its own\n"
+            "  categorization pass, and a batch run makes an uncategorized\n"
+            "  import look successful.\n\n"
+            "  Run:  python3 normalize.py --in <one-file>.csv\n"
+            "  Then: python3 import_csv.py --dry-run  ->  review  ->  commit\n"
+            "  Repeat per file. Only pass --allow-multi once the rules for\n"
+            "  every one of these banks are already settled.\n"
+        )
+
     all_tx, matched, unmatched = [], [], []
     stats = {}
 
@@ -299,16 +317,30 @@ def main():
         print(f"  MISS {os.path.basename(path):<22} no profile matches "
               f"headers: {header}")
 
+    # Always surfaced, not just under --report: an import where nothing matched
+    # a rule is the one failure that otherwise looks like a success.
+    uncat = [t for t in all_tx
+             if not t["category"] and t["direction"] != "internal"]
+    if uncat:
+        by_name = {}
+        for t in uncat:
+            key = t["merchant"] or t["name"]
+            by_name[key] = by_name.get(key, 0) + 1
+        print(f"\n  UNCATEGORIZED: {len(uncat)} of {len(all_tx)} rows have no "
+              f"category. Top unmatched payees:")
+        for name, n in sorted(by_name.items(), key=lambda kv: -kv[1])[:15]:
+            print(f"    {n:>4}  {name}")
+        print("\n  Add rules to rules/categorize.json, re-run normalize.py, and\n"
+              "  only then import. Do not commit a mostly-uncategorized batch.")
+
     if args.report:
-        by_dir, by_acct, uncat = {}, {}, 0
+        by_dir, by_acct = {}, {}
         for t in all_tx:
             by_dir[t["direction"]] = by_dir.get(t["direction"], 0) + 1
             by_acct[t["account"]] = by_acct.get(t["account"], 0) + 1
-            if not t["category"] and t["direction"] != "internal":
-                uncat += 1
         print("\n  direction:", by_dir)
         print("  account:  ", by_acct)
-        print(f"  uncategorized (needs review): {uncat}")
+        print(f"  uncategorized (needs review): {len(uncat)}")
         print("\n  rule hits:")
         for k, v in sorted(stats.items(), key=lambda kv: -kv[1]):
             print(f"    {v:>4}  {k}")

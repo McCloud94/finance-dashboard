@@ -35,6 +35,8 @@ DEFAULT_IN = os.path.join(BASE, "data", "normalized.csv")
 NEW_COLS = ("id", "date", "name", "merchant", "amount", "direction", "category",
             "account", "transfer_to", "flow", "refund", "note", "source",
             "planned", "source_file")
+CATEGORY_IDX = NEW_COLS.index("category")
+DIRECTION_IDX = NEW_COLS.index("direction")
 
 # How far apart a planned entry and the statement row that fulfils it may be
 # dated, and how close their amounts have to be. Same idea and same tolerance as
@@ -144,6 +146,11 @@ def main():
                     help=argparse.SUPPRESS)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
+        "--allow-uncategorized", action="store_true",
+        help="commit even when most incoming rows carry no category "
+             "(normally a sign the categorize rules never matched)",
+    )
+    ap.add_argument(
         "--replace", action="store_true",
         help="deprecated unsafe mode; requires --replace-source-file",
     )
@@ -246,6 +253,24 @@ def main():
           f"rejected {len(bad)}  deleted-in-dashboard {skipped}")
     for rid, why in bad[:10]:
         print(f"    REJECT {why}: {rid}")
+
+    # CATEGORY_IDX / DIRECTION_IDX track the tuple layout of `new` above.
+    uncategorized = [t for t in new
+                     if not t[CATEGORY_IDX] and t[DIRECTION_IDX] != "internal"]
+    categorizable = [t for t in new if t[DIRECTION_IDX] != "internal"]
+    if uncategorized:
+        share = len(uncategorized) / max(len(categorizable), 1)
+        print(f"\n  uncategorized: {len(uncategorized)} of {len(categorizable)} "
+              f"incoming non-transfer rows ({share:.0%})")
+        for t in uncategorized[:10]:
+            print(f"    no category: {t[2]}")
+        if share >= 0.3:
+            print("\n  This is what a failed categorization looks like. Add merchant\n"
+                  "  rules to rules/categorize.json, re-run normalize.py, and dry-run\n"
+                  "  again before committing.")
+            if not args.dry_run and not args.allow_uncategorized:
+                sys.exit("\n  refusing to commit: fix the rules, or pass "
+                         "--allow-uncategorized if this really is correct\n")
 
     # Planned entries this statement turns out to be the real record of. Printed
     # in full (never truncated) — each line is a row about to be dropped.
